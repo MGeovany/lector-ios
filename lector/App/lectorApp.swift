@@ -9,6 +9,10 @@ import SwiftUI
 
 @main
 struct lectorApp: App {
+    init() {
+        FontRegistrar.registerCinzelDecorativeIfNeeded()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

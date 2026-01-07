@@ -16,15 +16,15 @@ struct MainTabView: View {
             Group {
                 switch selectedTab {
                 case .home:
-                    homeView()
+                    HomeView()
                 case .favorites:
-                    favoritesView()
+                    FavoritesView()
                 case .add:
-                    addView()
+                    AddView()
                 case .preferences:
-                    preferencesView()
+                    PreferencesView()
                 case .profile:
-                    profileView()
+                    ProfileView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct profileView: View {
+struct ProfileView: View {
     var body: some View {
         NavigationStack {
             Text("Profile")
@@ -16,6 +16,3 @@ struct profileView: View {
     }
 }
 
-#Preview {
-    profileView()
-}
