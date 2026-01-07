@@ -38,36 +38,48 @@ struct HomeView: View {
     ]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HomeHeaderView()
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.black,
+                    Color(red: 0.06, green: 0.06, blue: 0.08),
+                    Color(red: 0.03, green: 0.03, blue: 0.04)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
-                ReadingFilterTabsView(
-                    filter: $filter,
-                    unreadCount: books.filter { !$0.isRead }.count
-                )
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    HomeHeaderView()
 
-                HomeStatsRowView(
-                    documentsCount: books.count,
-                    usedBytes: books.reduce(Int64(0)) { $0 + $1.sizeBytes },
-                    maxStorageText: "\(MAX_STORAGE) MB"
-                )
+                    ReadingFilterTabsView(
+                        filter: $filter,
+                        unreadCount: books.filter { !$0.isRead }.count
+                    )
 
-                LazyVStack(spacing: 14) {
-                    ForEach(filteredBooks) { book in
-                        BookCardView(
-                            book: book,
-                            onToggleRead: { toggleRead(bookID: book.id) }
-                        )
+                    HomeStatsRowView(
+                        documentsCount: books.count,
+                        usedBytes: books.reduce(Int64(0)) { $0 + $1.sizeBytes },
+                        maxStorageText: "\(MAX_STORAGE) MB"
+                    )
+
+                    LazyVStack(spacing: 14) {
+                        ForEach(filteredBooks) { book in
+                            BookCardView(
+                                book: book,
+                                onToggleRead: { toggleRead(bookID: book.id) }
+                            )
+                        }
                     }
+                    .padding(.top, 6)
                 }
-                .padding(.top, 6)
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .padding(.bottom, 26)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
-            .padding(.bottom, 24)
         }
-        .background(Color.white)
     }
 
     private var filteredBooks: [Book] {

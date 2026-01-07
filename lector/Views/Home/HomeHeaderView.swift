@@ -2,19 +2,30 @@ import SwiftUI
 
 struct HomeHeaderView: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("LECTOR")
                 // Use the Bold font face (not synthetic weight) for the logo.
-                .font(.custom("CinzelDecorative-Bold", size: 32))
-                .foregroundStyle(Color.black)
-                .tracking(1.5)
+                .font(.custom("CinzelDecorative-Bold", size: 34))
+                .foregroundStyle(Color.white)
+                .tracking(2.0)
 
-            Text("Your library")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.black.opacity(0.55))
+            HStack(spacing: 8) {
+                Text("Library")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.85))
+
+                Circle()
+                    .fill(Color.white.opacity(0.35))
+                    .frame(width: 3, height: 3)
+
+                Text("All your books")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.55))
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 10)
+        .padding(.top, 8)
+        .padding(.bottom, 2)
     }
 }
 

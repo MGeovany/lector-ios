@@ -36,7 +36,7 @@ struct MainTabView: View {
     }
 
     private var tabBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 25) {
             TabBarButton(
                 icon: selectedTab == .home ? "house.fill" : "house",
                 isSelected: selectedTab == .home,
@@ -67,22 +67,24 @@ struct MainTabView: View {
                 action: { selectedTab = .profile }
             )
         }
-        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 18)
         .padding(.top, 10)
         .padding(.bottom, 10)
         .background(
             ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                Rectangle()
                     .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color.black.opacity(0.80))
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                Rectangle()
+                    .fill(Color.black.opacity(0.85))
             }
         )
-        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 10)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
+        .overlay(
+            Rectangle()
+                .fill(Color.white.opacity(0.10))
+                .frame(height: 1),
+            alignment: .top
+        )
     }
 }
 

@@ -6,12 +6,19 @@ struct HomeStatsRowView: View {
     let maxStorageText: String
 
     var body: some View {
-        HStack(spacing: 22) {
-            StatPill(title: "Documents:", value: "\(documentsCount)")
-            StatPill(title: "Storage:", value: "\(formatBytes(usedBytes)) / \(maxStorageText)")
-            Spacer()
+        HStack(spacing: 12) {
+            StatCard(
+                icon: "doc.text",
+                title: "Documents",
+                value: "\(documentsCount)"
+            )
+
+            StatCard(
+                icon: "externaldrive",
+                title: "Storage",
+                value: "\(formatBytes(usedBytes)) / \(maxStorageText)"
+            )
         }
-        .padding(.top, 2)
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
@@ -24,19 +31,46 @@ struct HomeStatsRowView: View {
     }
 }
 
-private struct StatPill: View {
+private struct StatCard: View {
+    let icon: String
     let title: String
     let value: String
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(title)
+        HStack(spacing: 10) {
+            Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.black.opacity(0.70))
-            Text(value)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.black.opacity(0.92))
+                .foregroundStyle(Color.white.opacity(0.85))
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.55))
+
+                Text(value)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.90))
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
+        )
     }
 }
 

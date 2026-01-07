@@ -5,26 +5,33 @@ struct BookCardView: View {
     let onToggleRead: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                cover
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(book.title.uppercased())
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(Color.black.opacity(0.92))
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.92))
                         .lineLimit(2)
 
-                    Text("\(book.author) • \(book.pagesTotal) pages • \(formatBytes(book.sizeBytes))")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.black.opacity(0.55))
+                    Text(book.author)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.60))
+
+                    Text("\(book.pagesTotal) pages • \(formatBytes(book.sizeBytes))")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.45))
                 }
 
                 Spacer()
 
-                HStack(spacing: 10) {
+                HStack(spacing: 6) {
                     Button(action: onToggleRead) {
-                        Image(systemName: book.isRead ? "checkmark.circle" : "minus.circle")
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(Color.black.opacity(0.45))
+                        Image(systemName: book.isRead ? "checkmark.circle.fill" : "minus.circle")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(book.isRead ? Color.white : Color.white.opacity(0.55))
+                            .frame(width: 36, height: 36)
                     }
                     .buttonStyle(.plain)
 
@@ -59,37 +66,73 @@ struct BookCardView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(Color.black.opacity(0.45))
+                            .foregroundStyle(Color.white.opacity(0.70))
                             .frame(width: 36, height: 36)
                             .contentShape(Rectangle())
                     }
                 }
             }
 
-            HStack(spacing: 18) {
+            HStack(spacing: 14) {
                 Label("\(book.lastOpenedDaysAgo)w ago", systemImage: "calendar")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.black.opacity(0.55))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.55))
 
                 Label("Page \(book.currentPage) of \(book.pagesTotal)", systemImage: "book")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.black.opacity(0.55))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.55))
 
                 Spacer()
+
+                Text("\(Int((book.progress * 100).rounded()))%")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.85))
             }
 
             ProgressBarView(progress: book.progress)
-
-            Text("\(Int((book.progress * 100).rounded()))% read")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.black.opacity(0.70))
         }
-        .padding(18)
+        .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.06), radius: 16, x: 0, y: 10)
+                .fill(Color.white.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
         )
+    }
+
+    private var cover: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.18),
+                            Color.white.opacity(0.06)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+
+            Text(initials(from: book.title))
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.85))
+        }
+        .frame(width: 56, height: 72)
+    }
+
+    private func initials(from title: String) -> String {
+        let parts = title
+            .split(separator: " ")
+            .prefix(2)
+            .map { String($0.prefix(1)).uppercased() }
+        return parts.joined()
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
