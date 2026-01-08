@@ -13,6 +13,7 @@ struct HomeView: View {
             sizeBytes: 157_400,
             lastOpenedDaysAgo: 14,
             isRead: false,
+            isFavorite: true,
             tags: ["Book"]
         ),
         Book(
@@ -23,6 +24,7 @@ struct HomeView: View {
             sizeBytes: 157_400,
             lastOpenedDaysAgo: 14,
             isRead: false,
+            isFavorite: false,
             tags: ["Book"]
         ),
         Book(
@@ -33,6 +35,7 @@ struct HomeView: View {
             sizeBytes: 157_400,
             lastOpenedDaysAgo: 14,
             isRead: false,
+            isFavorite: false,
             tags: ["Book"]
         )
     ]
@@ -69,7 +72,8 @@ struct HomeView: View {
                         ForEach(filteredBooks) { book in
                             BookCardView(
                                 book: book,
-                                onToggleRead: { toggleRead(bookID: book.id) }
+                                onToggleRead: { toggleRead(bookID: book.id) },
+                                onToggleFavorite: { toggleFavorite(bookID: book.id) }
                             )
                         }
                     }
@@ -95,8 +99,10 @@ struct HomeView: View {
         guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
         books[idx].isRead.toggle()
     }
+
+    private func toggleFavorite(bookID: UUID) {
+        guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
+        books[idx].isFavorite.toggle()
+    }
 }
 
-#Preview {
-    HomeView()
-}

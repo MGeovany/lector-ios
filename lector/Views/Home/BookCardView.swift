@@ -3,6 +3,7 @@ import SwiftUI
 struct BookCardView: View {
     let book: Book
     let onToggleRead: () -> Void
+    let onToggleFavorite: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -27,13 +28,7 @@ struct BookCardView: View {
                 Spacer()
 
                 HStack(spacing: 6) {
-                    Button(action: onToggleRead) {
-                        Image(systemName: book.isRead ? "checkmark.circle.fill" : "minus.circle")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(book.isRead ? Color.white : Color.white.opacity(0.55))
-                            .frame(width: 36, height: 36)
-                    }
-                    .buttonStyle(.plain)
+                   
 
                     Menu {
                         Button {
@@ -41,6 +36,10 @@ struct BookCardView: View {
                         } label: {
                             Label(book.isRead ? "Mark as unread" : "Mark as read", systemImage: "checkmark")
                         }
+
+                      
+
+                        Divider()
 
                         Button {
                             // Mock action
@@ -155,9 +154,11 @@ struct BookCardView: View {
             sizeBytes: 157_400,
             lastOpenedDaysAgo: 14,
             isRead: false,
+            isFavorite: true,
             tags: ["Book"]
         ),
-        onToggleRead: {}
+        onToggleRead: {},
+        onToggleFavorite: {}
     )
     .padding()
     .background(Color.white)

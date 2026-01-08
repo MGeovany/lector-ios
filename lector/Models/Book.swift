@@ -16,6 +16,7 @@ struct Book: Identifiable, Hashable {
     let sizeBytes: Int64
     let lastOpenedDaysAgo: Int
     var isRead: Bool
+    var isFavorite: Bool
     var tags: [String]
 
     var progress: Double {
