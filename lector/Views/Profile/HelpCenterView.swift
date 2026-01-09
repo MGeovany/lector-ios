@@ -47,7 +47,10 @@ struct HelpCenterView: View {
     private func mailtoURL(subject: String, body: String) -> URL {
         let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
         let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? body
-        return URL(string: "mailto:\(supportEmail)?subject=\(encodedSubject)&body=\(encodedBody)") ?? URL(string: "mailto:\(supportEmail)")!
+        return URL(string: "mailto:\(supportEmail)?subject=\(encodedSubject)&body=\(encodedBody)")
+            ?? URL(string: "mailto:\(supportEmail)")
+            ?? URL(string: "mailto:")
+            ?? URL(fileURLWithPath: "/")
     }
 }
 
@@ -56,4 +59,3 @@ struct HelpCenterView: View {
         HelpCenterView()
     }
 }
-

@@ -9,17 +9,16 @@ import SwiftUI
 
 @main
 struct lectorApp: App {
-    @StateObject private var subscription = SubscriptionStore()
-    @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
+  @StateObject private var subscription = SubscriptionStore()
 
-    init() {
-        FontRegistrar.registerCinzelDecorativeIfNeeded()
-    }
+  init() {
+    FontRegistrar.registerCinzelDecorativeIfNeeded()
+  }
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(subscription)
-        }
+  var body: some Scene {
+    WindowGroup {
+      ContentView()
+        .environmentObject(subscription)
     }
+  }
 }

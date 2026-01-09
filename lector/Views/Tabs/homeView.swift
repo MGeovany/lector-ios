@@ -58,7 +58,8 @@ struct HomeView: View {
 
                     HomeStatsRowView(
                         documentsCount: books.count,
-                        usedBytes: books.reduce(Int64(0)) { $0 + $1.sizeBytes }, maxStorageText: "\(MAX_STORAGE_MB) MB"
+                        usedBytes: books.reduce(Int64(0)) { $0 + $1.sizeBytes },
+                        maxStorageText: "\(MAX_STORAGE_MB) MB"
                     )
 
                     LazyVStack(spacing: 14) {
@@ -127,4 +128,3 @@ struct HomeView: View {
         books[idx].isFavorite.toggle()
     }
 }
-

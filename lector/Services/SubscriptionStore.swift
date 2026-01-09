@@ -20,7 +20,6 @@ final class SubscriptionStore: ObservableObject {
         ByteCountFormatter.string(fromByteCount: maxStorageBytes, countStyle: .file)
     }
 
-
     var maxStorageMB: Int {
         isPremium ? MAX_STORAGE_PREMIUM_MB : MAX_STORAGE_MB
     }
@@ -35,4 +34,3 @@ final class SubscriptionStore: ObservableObject {
 
     private static let isPremiumKey = "lector_isPremium"
 }
-
