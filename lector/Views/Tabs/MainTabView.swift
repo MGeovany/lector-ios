@@ -41,106 +41,81 @@ struct MainTabView: View {
     }
 
     private var tabBar: some View {
-        HStack(spacing: 25) {
-            TabBarButton(
+        HStack(spacing: 0) {
+            TabBarItemButton(
+                title: "Home",
                 icon: selectedTab == .home ? "house.fill" : "house",
                 isSelected: selectedTab == .home,
                 action: { selectedTab = .home }
             )
 
-            TabBarButton(
+            TabBarItemButton(
+                title: "Favorites",
                 icon: selectedTab == .favorites ? "heart.fill" : "heart",
                 isSelected: selectedTab == .favorites,
                 action: { selectedTab = .favorites }
             )
 
-            CenterTabBarButton(
+            TabBarItemButton(
+                title: "Add",
                 icon: selectedTab == .add ? "plus.app.fill" : "plus.app",
                 isSelected: selectedTab == .add,
                 action: { selectedTab = .add }
             )
 
-            TabBarButton(
+            TabBarItemButton(
+                title: "Preferences",
                 icon: selectedTab == .preferences ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
                 isSelected: selectedTab == .preferences,
                 action: { selectedTab = .preferences }
             )
 
-            TabBarButton(
+            TabBarItemButton(
+                title: "Profile",
                 icon: selectedTab == .profile ? "person.crop.circle.fill" : "person.crop.circle",
                 isSelected: selectedTab == .profile,
                 action: { selectedTab = .profile }
             )
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 18)
-        .padding(.top, 10)
-        .padding(.bottom, 10)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
         .background(
-            ZStack {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                // Give the bar a solid base so it has contrast in Light mode,
-                // while still feeling "glassy".
-                Rectangle()
-                    .fill(colorScheme == .dark ? Color.black.opacity(0.55) : Color.white.opacity(0.85))
-            }
-            .ignoresSafeArea(.container, edges: .bottom)
+            Rectangle()
+                .fill(colorScheme == .dark ? Color.black : Color(.systemBackground))
+                .ignoresSafeArea(.container, edges: .bottom)
         )
         .overlay(
             Rectangle()
-                .fill(Color(.separator).opacity(colorScheme == .dark ? 0.45 : 0.7))
+                .fill(Color(.separator).opacity(colorScheme == .dark ? 0.35 : 0.8))
                 .frame(height: 1),
             alignment: .top
         )
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.25 : 0.10), radius: 18, x: 0, y: -2)
     }
 }
 
-struct TabBarButton: View {
+struct TabBarItemButton: View {
+    let title: String
     let icon: String
     let isSelected: Bool
     let action: () -> Void
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 7) {
+            VStack(spacing: 2) {
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(isSelected ? Color.primary : .secondary)
 
-                Capsule(style: .continuous)
-                    .fill(isSelected ? Color.accentColor : Color.clear)
-                    .frame(width: 16, height: 3)
+                Text(title)
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(isSelected ? Color.primary : .secondary)
             }
-            .frame(width: 52, height: 44)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
         }
         .buttonStyle(PlainButtonStyle())
-    }
-}
-
-struct CenterTabBarButton: View {
-    let icon: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            // Same vertical layout as the other tabs (icon + indicator placeholder),
-            // but with a slightly larger icon.
-            VStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 30, weight: .regular))
-                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
-
-                Capsule(style: .continuous)
-                    .fill(Color.clear)
-                    .frame(width: 16, height: 3)
-            }
-            .frame(width: 52, height: 44)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .accessibilityLabel("Add")
+        .accessibilityLabel(title)
     }
 }
 

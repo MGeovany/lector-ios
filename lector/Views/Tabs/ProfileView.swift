@@ -144,7 +144,7 @@ struct ProfileView: View {
       .listSectionSpacing(8)
       .navigationBarTitleDisplayMode(.inline)
       .safeAreaInset(edge: .bottom, spacing: 0) {
-        Color.clear.frame(height: 86)
+        Color.clear.frame(height: 62)
       }
       .sheet(isPresented: $showPremiumSheet) {
         PremiumUpsellSheetView()
