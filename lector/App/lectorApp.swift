@@ -9,6 +9,9 @@ import SwiftUI
 
 @main
 struct lectorApp: App {
+    @StateObject private var subscription = SubscriptionStore()
+    @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
+
     init() {
         FontRegistrar.registerCinzelDecorativeIfNeeded()
     }
@@ -16,7 +19,7 @@ struct lectorApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .preferredColorScheme(.dark)
+                .environmentObject(subscription)
         }
     }
 }

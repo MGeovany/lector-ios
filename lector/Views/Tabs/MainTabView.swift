@@ -10,6 +10,7 @@ struct MainTabView: View {
     }
 
     @State private var selectedTab: Tab = .home
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -79,17 +80,20 @@ struct MainTabView: View {
             ZStack {
                 Rectangle()
                     .fill(.ultraThinMaterial)
+                // Give the bar a solid base so it has contrast in Light mode,
+                // while still feeling "glassy".
                 Rectangle()
-                    .fill(Color.black.opacity(0.85))
+                    .fill(colorScheme == .dark ? Color.black.opacity(0.55) : Color.white.opacity(0.85))
             }
             .ignoresSafeArea(.container, edges: .bottom)
         )
         .overlay(
             Rectangle()
-                .fill(Color.white.opacity(0.10))
+                .fill(Color(.separator).opacity(colorScheme == .dark ? 0.45 : 0.7))
                 .frame(height: 1),
             alignment: .top
         )
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.25 : 0.10), radius: 18, x: 0, y: -2)
     }
 }
 
@@ -103,10 +107,10 @@ struct TabBarButton: View {
             VStack(spacing: 7) {
                 Image(systemName: icon)
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.55))
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
 
                 Capsule(style: .continuous)
-                    .fill(isSelected ? Color.white : Color.clear)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
                     .frame(width: 16, height: 3)
             }
             .frame(width: 52, height: 44)
@@ -127,7 +131,7 @@ struct CenterTabBarButton: View {
             VStack(spacing: 7) {
                 Image(systemName: icon)
                     .font(.system(size: 30, weight: .regular))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
 
                 Capsule(style: .continuous)
                     .fill(Color.clear)
@@ -142,4 +146,5 @@ struct CenterTabBarButton: View {
 
 #Preview {
     MainTabView()
+        .environmentObject(SubscriptionStore())
 }

@@ -1,7 +1,10 @@
 import SwiftUI
 
 struct HomeView: View {
+    @EnvironmentObject private var subscription: SubscriptionStore
+    @Environment(\.colorScheme) private var colorScheme
     @State private var filter: ReadingFilter = .unread
+    @State private var showPremiumSheet: Bool = false
 
     // Mock data for now
     @State private var books: [Book] = [
@@ -42,16 +45,7 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color.black,
-                    Color(red: 0.06, green: 0.06, blue: 0.08),
-                    Color(red: 0.03, green: 0.03, blue: 0.04)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            background.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
@@ -64,8 +58,7 @@ struct HomeView: View {
 
                     HomeStatsRowView(
                         documentsCount: books.count,
-                        usedBytes: books.reduce(Int64(0)) { $0 + $1.sizeBytes },
-                        maxStorageText: "\(MAX_STORAGE) MB"
+                        usedBytes: books.reduce(Int64(0)) { $0 + $1.sizeBytes } , maxStorageText: "\(MAX_STORAGE_MB) MB"
                     )
 
                     LazyVStack(spacing: 14) {
@@ -82,6 +75,35 @@ struct HomeView: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 14)
                 .padding(.bottom, 26)
+            }
+        }
+        .sheet(isPresented: $showPremiumSheet) {
+            PremiumUpsellSheetView()
+                .environmentObject(subscription)
+        }
+    }
+
+    private var background: some View {
+        Group {
+            if colorScheme == .dark {
+                LinearGradient(
+                    colors: [
+                        Color.black,
+                        Color(red: 0.06, green: 0.06, blue: 0.08),
+                        Color(red: 0.03, green: 0.03, blue: 0.04)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            } else {
+                LinearGradient(
+                    colors: [
+                        Color(.systemGroupedBackground),
+                        Color(.systemBackground)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             }
         }
     }

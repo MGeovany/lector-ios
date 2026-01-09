@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct FavoritesView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var query: String = ""
 
     // Mock favorites for now (UX-focused). Replace with persistence later.
@@ -52,15 +53,9 @@ struct FavoritesView: View {
             ZStack {
                 background
 
-                Group {
-                    if filteredFavorites.isEmpty {
-                        emptyState
-                    } else {
-                        content
-                    }
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 14)
+                content
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
@@ -68,15 +63,28 @@ struct FavoritesView: View {
     }
 
     private var background: some View {
-        LinearGradient(
-            colors: [
-                Color.black,
-                Color(red: 0.06, green: 0.06, blue: 0.08),
-                Color(red: 0.03, green: 0.03, blue: 0.04)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        Group {
+            if colorScheme == .dark {
+                LinearGradient(
+                    colors: [
+                        Color.black,
+                        Color(red: 0.06, green: 0.06, blue: 0.08),
+                        Color(red: 0.03, green: 0.03, blue: 0.04)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            } else {
+                LinearGradient(
+                    colors: [
+                        Color(.systemGroupedBackground),
+                        Color(.systemBackground)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        }
         .ignoresSafeArea()
     }
 
@@ -85,13 +93,18 @@ struct FavoritesView: View {
             VStack(alignment: .leading, spacing: 14) {
                 FavoritesHeaderView(filteredFavorites: filteredFavorites)
                 FavoritesSearchBar(text: $query)
-                LazyVStack(spacing: 14) {
-                    ForEach(filteredFavorites) { book in
-                        BookCardView(
-                            book: book,
-                            onToggleRead: { toggleRead(bookID: book.id) },
-                            onToggleFavorite: { toggleFavorite(bookID: book.id) }
-                        )
+                
+                if filteredFavorites.isEmpty {
+                    inlineEmptyState
+                } else {
+                    LazyVStack(spacing: 14) {
+                        ForEach(filteredFavorites) { book in
+                            BookCardView(
+                                book: book,
+                                onToggleRead: { toggleRead(bookID: book.id) },
+                                onToggleFavorite: { toggleFavorite(bookID: book.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -102,36 +115,36 @@ struct FavoritesView: View {
    
 
 
-    private var emptyState: some View {
-        VStack(spacing: 14) {
+    private var inlineEmptyState: some View {
+        VStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.10))
-                    .frame(width: 68, height: 68)
+                    .fill(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.secondarySystemGroupedBackground))
+                    .frame(width: 56, height: 56)
                     .overlay(
                         Circle()
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                            .stroke(colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5), lineWidth: 1)
                     )
 
-                Image(systemName: "heart")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.90))
+                Image(systemName: query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "heart" : "magnifyingglass")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.90) : .secondary)
             }
 
-            VStack(spacing: 6) {
-                Text("No favorites yet")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.92))
+            VStack(spacing: 4) {
+                Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No favorites yet" : "No matches")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : .primary)
 
-                Text(query.isEmpty ? "Save books you love to find them faster here." : "No matches. Try a different search.")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.60))
+                Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                     ? "Save books you love to find them faster here."
+                     : "Try a different search.")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
                     .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 14)
 
-            if !query.isEmpty {
+            if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Button {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
                         query = ""
@@ -139,15 +152,15 @@ struct FavoritesView: View {
                 } label: {
                     Label("Reset", systemImage: "arrow.counterclockwise")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.90))
+                        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.90) : .primary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(
                             Capsule(style: .continuous)
-                                .fill(Color.white.opacity(0.12))
+                                .fill(colorScheme == .dark ? Color.white.opacity(0.12) : Color(.systemBackground))
                                 .overlay(
                                     Capsule(style: .continuous)
-                                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                                        .stroke(colorScheme == .dark ? Color.white.opacity(0.14) : Color(.separator).opacity(0.5), lineWidth: 1)
                                 )
                         )
                 }
@@ -155,8 +168,8 @@ struct FavoritesView: View {
             }
         }
         .frame(maxWidth: 420)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
     private var filteredFavorites: [Book] {
@@ -192,12 +205,13 @@ struct FavoritesView: View {
 private struct FavoritesSearchBar: View {
     @Binding var text: String
     @FocusState private var isFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.55))
+                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
             TextField("Search favorites", text: $text)
                 .focused($isFocused)
@@ -205,7 +219,7 @@ private struct FavoritesSearchBar: View {
                 .disableAutocorrection(true)
                 .submitLabel(.search)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.92))
+                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : .primary)
 
             if !text.isEmpty {
                 Button {
@@ -213,7 +227,7 @@ private struct FavoritesSearchBar: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -224,10 +238,10 @@ private struct FavoritesSearchBar: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.10))
+                .fill(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.systemBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5), lineWidth: 1)
                 )
         )
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
