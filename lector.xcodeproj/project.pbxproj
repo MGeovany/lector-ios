@@ -39,6 +39,7 @@
 			children = (
 				969C9A4A2F0C1A6E00EA0DB2 /* lector */,
 				969C9A492F0C1A6E00EA0DB2 /* Products */,
+				96A3D1882F1158CB0021ABAF /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -48,6 +49,14 @@
 				969C9A482F0C1A6E00EA0DB2 /* lector.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		96A3D1882F1158CB0021ABAF /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				F0A1B2C3D4E5F67890123456 /* FontRegistrar.swift */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

@@ -3,36 +3,59 @@ import SwiftUI
 struct UpgradeToPremiumCardView: View {
     let storageText: String
     let onUpgradeTapped: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
-                Text("Upgrade to")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.primary)
+        let buttonFill = AppColors.primaryButtonFill(for: colorScheme)
 
-                Text("PREMIUM")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.accentColor, in: Capsule(style: .continuous))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.secondarySystemBackground))
+                        .frame(width: 34, height: 34)
+                        .overlay(
+                            Circle()
+                                .stroke(colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5), lineWidth: 1)
+                        )
 
-                Spacer()
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 14, weight: .heavy))
+                        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text("Upgrade to Premium")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.primary)
+
+                        Text("PREMIUM")
+                            .font(.system(size: 10, weight: .heavy))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(buttonFill, in: Capsule(style: .continuous))
+                    }
+
+                    Text("More storage for your library.")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
             }
 
-            Text("Get more storage for your library.")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 8) {
-                Image(systemName: "externaldrive.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text(storageText)
+            HStack(spacing: 10) {
+                Label(storageText, systemImage: "externaldrive.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.secondary)
-                Spacer()
+
+                Spacer(minLength: 0)
+
+                Text("Cancel anytime")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
             }
 
             Button(action: onUpgradeTapped) {
@@ -45,16 +68,20 @@ struct UpgradeToPremiumCardView: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(buttonFill)
+                )
             }
             .buttonStyle(.plain)
+            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.12), radius: 14, x: 0, y: 6)
         }
-        .padding(14)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(.secondarySystemGroupedBackground))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(Color(.separator).opacity(0.6), lineWidth: 1)
                 )
         )

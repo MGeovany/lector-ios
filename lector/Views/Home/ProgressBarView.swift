@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProgressBarView: View {
     let progress: Double
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { geo in
@@ -11,7 +12,7 @@ struct ProgressBarView: View {
                     .frame(height: 9)
 
                 Capsule(style: .continuous)
-                    .fill(Color.accentColor)
+                    .fill(AppColors.progressFill(for: colorScheme))
                     .frame(width: max(10, geo.size.width * progress), height: 9)
             }
         }

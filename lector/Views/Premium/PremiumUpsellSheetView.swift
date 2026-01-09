@@ -3,6 +3,7 @@ import SwiftUI
 struct PremiumUpsellSheetView: View {
     @EnvironmentObject private var subscription: SubscriptionStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -121,7 +122,7 @@ struct PremiumUpsellSheetView: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(AppColors.primaryButtonFill(for: colorScheme), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
             .disabled(subscription.isPremium)

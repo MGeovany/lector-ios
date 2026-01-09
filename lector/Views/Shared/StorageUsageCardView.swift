@@ -5,6 +5,7 @@ struct StorageUsageCardView: View {
     let maxBytes: Int64
     let isPremium: Bool
     let onUpgradeTapped: (() -> Void)?
+    @Environment(\.colorScheme) private var colorScheme
 
     private var progress: Double {
         guard maxBytes > 0 else { return 0 }
@@ -76,7 +77,7 @@ struct StorageUsageCardView: View {
                         .padding(.vertical, 8)
                     }
                     .buttonStyle(.borderless)
-                    .background(Color.accentColor, in: Capsule(style: .continuous))
+                    .background(AppColors.primaryButtonFill(for: colorScheme), in: Capsule(style: .continuous))
                 }
             }
 

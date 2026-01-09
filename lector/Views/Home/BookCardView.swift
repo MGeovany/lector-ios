@@ -104,12 +104,13 @@ struct BookCardView: View {
 
     private var cover: some View {
         ZStack {
+            let lightTint = AppColors.matteBlack
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            (colorScheme == .dark ? Color.white.opacity(0.18) : Color.accentColor.opacity(0.18)),
-                            (colorScheme == .dark ? Color.white.opacity(0.06) : Color.accentColor.opacity(0.06))
+                            (colorScheme == .dark ? Color.white.opacity(0.18) : lightTint.opacity(0.18)),
+                            (colorScheme == .dark ? Color.white.opacity(0.06) : lightTint.opacity(0.06))
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
