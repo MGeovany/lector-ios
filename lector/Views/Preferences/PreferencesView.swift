@@ -117,8 +117,6 @@ struct PreferencesView: View {
                     }
                     .disabled(!viewModel.hasChanges)
                 }
-
-               
             }
         }
     }
@@ -190,12 +188,5 @@ private struct PreferenceSectionCard<Content: View>: View {
         )
     }
 }
-
-
-
-
-
-
-
 
 

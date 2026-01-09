@@ -90,6 +90,7 @@ final class PreferencesViewModel: ObservableObject {
         font = ReadingPreferencesDefaults.font
         fontSize = ReadingPreferencesDefaults.fontSize
         lineSpacing = ReadingPreferencesDefaults.lineSpacing
+        save()
     }
 
     private var current: ReadingPreferencesSnapshot {
@@ -101,4 +102,3 @@ final class PreferencesViewModel: ObservableObject {
         )
     }
 }
-
