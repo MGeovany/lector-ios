@@ -48,7 +48,7 @@ private enum SampleTexts {
 
   static func generic(title: String) -> String {
     """
-    \\(title)
+    \(title)
 
     Este es un texto de ejemplo para previsualizar la lectura por páginas.
 
