@@ -7,8 +7,9 @@
 
 import Foundation
 
-// MAX: 15 MB
-public let MAX_STORAGE: Int = 15
+// Storage limits (MB)
+public let MAX_STORAGE_MB: Int = 15
+public let MAX_STORAGE_PREMIUM_MB: Int = 250
 
 enum PreferencesKeys {
     static let readingTheme = "preferences.readingTheme"

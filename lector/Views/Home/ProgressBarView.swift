@@ -2,22 +2,17 @@ import SwiftUI
 
 struct ProgressBarView: View {
     let progress: Double
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.10))
+                    .fill(Color(.tertiarySystemFill))
                     .frame(height: 9)
 
                 Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.95), Color.white.opacity(0.55)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(AppColors.progressFill(for: colorScheme))
                     .frame(width: max(10, geo.size.width * progress), height: 9)
             }
         }

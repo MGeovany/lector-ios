@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HomeStatsRowView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let documentsCount: Int
     let usedBytes: Int64
     let maxStorageText: String
@@ -10,13 +11,15 @@ struct HomeStatsRowView: View {
             StatCard(
                 icon: "doc.text",
                 title: "Documents",
-                value: "\(documentsCount)"
+                value: "\(documentsCount)",
+                colorScheme: colorScheme
             )
 
             StatCard(
                 icon: "externaldrive",
                 title: "Storage",
-                value: "\(formatBytes(usedBytes)) / \(maxStorageText)"
+                value: "\(formatBytes(usedBytes)) / \(maxStorageText)",
+                colorScheme: colorScheme
             )
         }
     }
@@ -35,26 +38,27 @@ private struct StatCard: View {
     let icon: String
     let title: String
     let value: String
+    let colorScheme: ColorScheme
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.85))
+                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .secondary)
                 .frame(width: 26, height: 26)
                 .background(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color(.secondarySystemGroupedBackground))
                 )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.55))
+                    .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
                 Text(value)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.90))
+                    .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.90) : .primary)
                     .lineLimit(1)
             }
 
@@ -65,18 +69,12 @@ private struct StatCard: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+                .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color(.systemBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                        .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.5), lineWidth: 1)
                 )
         )
     }
 }
-
-#Preview {
-    HomeStatsRowView(documentsCount: 1, usedBytes: 157_400, maxStorageText: "15.0 MB")
-        .padding()
-}
-
 

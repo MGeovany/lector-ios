@@ -9,14 +9,16 @@ import SwiftUI
 
 @main
 struct lectorApp: App {
-    init() {
-        FontRegistrar.registerCinzelDecorativeIfNeeded()
-    }
+  @StateObject private var subscription = SubscriptionStore()
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .preferredColorScheme(.dark)
-        }
+  init() {
+    FontRegistrar.registerCinzelDecorativeIfNeeded()
+  }
+
+  var body: some Scene {
+    WindowGroup {
+      ContentView()
+        .environmentObject(subscription)
     }
+  }
 }

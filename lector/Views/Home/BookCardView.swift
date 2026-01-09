@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BookCardView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let book: Book
     let onToggleRead: () -> Void
     let onToggleFavorite: () -> Void
@@ -13,16 +14,16 @@ struct BookCardView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(book.title.uppercased())
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.92))
+                        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : .primary)
                         .lineLimit(2)
 
                     Text(book.author)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.60))
+                        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
 
                     Text("\(book.pagesTotal) pages • \(formatBytes(book.sizeBytes))")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
                 }
 
                 Spacer()
@@ -65,7 +66,7 @@ struct BookCardView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.70))
+                            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.70) : .secondary)
                             .frame(width: 36, height: 36)
                             .contentShape(Rectangle())
                     }
@@ -75,17 +76,17 @@ struct BookCardView: View {
             HStack(spacing: 14) {
                 Label("\(book.lastOpenedDaysAgo)w ago", systemImage: "calendar")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.55))
+                    .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
                 Label("Page \(book.currentPage) of \(book.pagesTotal)", systemImage: "book")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.55))
+                    .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
                 Spacer()
 
                 Text("\(Int((book.progress * 100).rounded()))%")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .primary)
             }
 
             ProgressBarView(progress: book.progress)
@@ -93,22 +94,23 @@ struct BookCardView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.07))
+                .fill(colorScheme == .dark ? Color.white.opacity(0.07) : Color(.systemBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                        .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.5), lineWidth: 1)
                 )
         )
     }
 
     private var cover: some View {
         ZStack {
+            let lightTint = AppColors.matteBlack
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.18),
-                            Color.white.opacity(0.06)
+                            (colorScheme == .dark ? Color.white.opacity(0.18) : lightTint.opacity(0.18)),
+                            (colorScheme == .dark ? Color.white.opacity(0.06) : lightTint.opacity(0.06))
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -116,12 +118,12 @@ struct BookCardView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5), lineWidth: 1)
                 )
 
             Text(initials(from: book.title))
                 .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.85))
+                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .primary)
         }
         .frame(width: 56, height: 72)
     }
