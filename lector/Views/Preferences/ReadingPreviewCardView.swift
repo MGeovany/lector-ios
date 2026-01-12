@@ -28,7 +28,7 @@ struct ReadingPreviewCardView: View {
           .fill(theme.surfaceBackground)
 
         VStack(alignment: .leading, spacing: 10) {
-          Text("Capítulo 1")
+          Text("Chapter 1")
             .font(font.font(size: 13))
             .foregroundStyle(theme.surfaceSecondaryText)
 

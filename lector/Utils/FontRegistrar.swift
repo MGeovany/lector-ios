@@ -8,6 +8,12 @@ enum FontRegistrar {
     registerFontIfNeeded(filename: "CinzelDecorative-Bold", fileExtension: "ttf")
   }
 
+  /// Registers Parkinsans (Regular 400) from the app bundle at runtime.
+  /// Drop `Parkinsans-Regular.ttf` into `lector/Resources/Fonts/` and ensure it's included in the app target.
+  static func registerParkinsansIfNeeded() {
+    registerFontIfNeeded(filename: "Parkinsans-Regular", fileExtension: "ttf")
+  }
+
   private static func registerFontIfNeeded(filename: String, fileExtension: String) {
     guard let url = Bundle.main.url(forResource: filename, withExtension: fileExtension) else {
       // If this happens, the font file likely wasn't included in the app bundle resources.

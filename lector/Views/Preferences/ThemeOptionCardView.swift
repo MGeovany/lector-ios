@@ -36,7 +36,7 @@ struct ThemeOptionCardView: View {
           Text("Preview")
             .font(.system(size: 11, weight: .bold))
             .foregroundStyle(option.surfaceSecondaryText)
-          Text("El lector busca calma.")
+          Text("Reading should feel calm.")
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(option.surfaceText)
             .lineLimit(2)

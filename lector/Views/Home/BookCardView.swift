@@ -161,23 +161,3 @@ struct BookCardView: View {
     return formatter.string(fromByteCount: bytes)
   }
 }
-
-#Preview {
-  BookCardView(
-    book: Book(
-      title: "Noches Blancas",
-      author: "J.A.C.",
-      pagesTotal: 32,
-      currentPage: 14,
-      sizeBytes: 157_400,
-      lastOpenedDaysAgo: 14,
-      isRead: false,
-      isFavorite: true,
-      tags: ["Book"]
-    ),
-    onOpen: {},
-    onToggleRead: {},
-    onToggleFavorite: {}
-  )
-  .padding()
-}

@@ -9,18 +9,21 @@ import SwiftUI
 
 @main
 struct lectorApp: App {
-    @StateObject private var preferences = PreferencesViewModel()
-    @StateObject private var subscription = SubscriptionStore()
+  @StateObject private var preferences = PreferencesViewModel()
+  @StateObject private var subscription = SubscriptionStore()
 
-    init() {
-        FontRegistrar.registerCinzelDecorativeIfNeeded()
-    }
+  init() {
+    FontRegistrar.registerCinzelDecorativeIfNeeded()
+    FontRegistrar.registerParkinsansIfNeeded()
+  }
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(preferences)
-                .environmentObject(subscription)
-        }
+  var body: some Scene {
+    WindowGroup {
+      ContentView()
+      // Base typography for the whole app (views can override with `.font(...)`).
+      .environment(\.font, .custom("Parkinsans-Regular", size: 16))
+      .environmentObject(preferences)
+      .environmentObject(subscription)
     }
+  }
 }

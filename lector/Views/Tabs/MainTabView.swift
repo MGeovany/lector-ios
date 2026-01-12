@@ -4,7 +4,6 @@ struct MainTabView: View {
   enum Tab: Hashable {
     case home
     case favorites
-    case add
     case preferences
     case profile
   }
@@ -12,6 +11,7 @@ struct MainTabView: View {
   @State private var selectedTab: Tab = .home
   @State private var isTabBarHidden: Bool = false
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(AppSession.self) private var session
 
   var body: some View {
     TabView(selection: $selectedTab) {
@@ -20,9 +20,6 @@ struct MainTabView: View {
 
       FavoritesView()
         .tag(Tab.favorites)
-
-      AddView()
-        .tag(Tab.add)
 
       PreferencesView()
         .tag(Tab.preferences)
@@ -52,36 +49,30 @@ struct MainTabView: View {
     HStack(spacing: 0) {
       TabBarItemButton(
         title: "Home",
-        icon: selectedTab == .home ? "house.fill" : "house",
+        icon: selectedTab == .home ? .asset("HomeIconActive") : .asset("HomeIcon"),
         isSelected: selectedTab == .home,
         action: { selectedTab = .home }
       )
 
       TabBarItemButton(
         title: "Favorites",
-        icon: selectedTab == .favorites ? "heart.fill" : "heart",
+        icon: selectedTab == .favorites ? .system("heart.fill") : .system("heart"),
         isSelected: selectedTab == .favorites,
         action: { selectedTab = .favorites }
       )
 
       TabBarItemButton(
-        title: "Add",
-        icon: selectedTab == .add ? "plus.app.fill" : "plus.app",
-        isSelected: selectedTab == .add,
-        action: { selectedTab = .add }
-      )
-
-      TabBarItemButton(
         title: "Preferences",
         icon: selectedTab == .preferences
-          ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
+          ? .system("line.3.horizontal.decrease.circle.fill")
+          : .system("line.3.horizontal.decrease.circle"),
         isSelected: selectedTab == .preferences,
         action: { selectedTab = .preferences }
       )
 
       TabBarItemButton(
         title: "Profile",
-        icon: selectedTab == .profile ? "person.crop.circle.fill" : "person.crop.circle",
+        icon: .profileAvatar(url: session.profile?.avatarURL),
         isSelected: selectedTab == .profile,
         action: { selectedTab = .profile }
       )
@@ -105,7 +96,7 @@ struct MainTabView: View {
 
 struct TabBarItemButton: View {
   let title: String
-  let icon: String
+  let icon: TabBarIcon
   let isSelected: Bool
   let action: () -> Void
   @Environment(\.colorScheme) private var colorScheme
@@ -113,11 +104,7 @@ struct TabBarItemButton: View {
   var body: some View {
     Button(action: action) {
       VStack(spacing: 2) {
-        Image(systemName: icon)
-          .font(.system(size: 20, weight: .regular))
-          .foregroundStyle(
-            isSelected
-              ? AppColors.tabSelected(for: colorScheme) : AppColors.tabUnselected(for: colorScheme))
+        TabBarIconView(icon: icon, isSelected: isSelected)
 
         Text(title)
           .font(.system(size: 10, weight: .bold))
@@ -130,6 +117,67 @@ struct TabBarItemButton: View {
     }
     .buttonStyle(PlainButtonStyle())
     .accessibilityLabel(title)
+  }
+}
+
+enum TabBarIcon: Equatable {
+  case system(String)
+  case asset(String)
+  case profileAvatar(url: URL?)
+}
+
+struct TabBarIconView: View {
+  let icon: TabBarIcon
+  let isSelected: Bool
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    switch icon {
+    case .system(let name):
+      Image(systemName: name)
+        .font(.system(size: 20, weight: .regular))
+        .foregroundStyle(foreground)
+
+    case .asset(let name):
+      Image(name)
+        .renderingMode(.template)
+        .resizable()
+        .scaledToFit()
+        .frame(width: 22, height: 22)
+        .foregroundStyle(foreground)
+
+    case .profileAvatar(let url):
+      if let url {
+        AsyncImage(url: url) { phase in
+          switch phase {
+          case .success(let image):
+            image
+              .resizable()
+              .scaledToFill()
+          default:
+            Image(systemName: "person.crop.circle")
+              .resizable()
+              .scaledToFit()
+              .padding(3)
+          }
+        }
+        .frame(width: 24, height: 24)
+        .background(Color.black.opacity(colorScheme == .dark ? 0.20 : 0.06))
+        .clipShape(Circle())
+        .overlay(
+          Circle()
+            .stroke(foreground.opacity(isSelected ? 0.30 : 0.18), lineWidth: 0)
+        )
+      } else {
+        Image(systemName: "person.crop.circle")
+          .font(.system(size: 20, weight: .regular))
+          .foregroundStyle(foreground)
+      }
+    }
+  }
+
+  private var foreground: Color {
+    isSelected ? AppColors.tabSelected(for: colorScheme) : AppColors.tabUnselected(for: colorScheme)
   }
 }
 

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ProfileView: View {
   @EnvironmentObject private var subscription: SubscriptionStore
+  @Environment(AppSession.self) private var session
   @State private var showPremiumSheet: Bool = false
   @State private var showDeleteAccountConfirm: Bool = false
   @State private var showLogoutConfirm: Bool = false
@@ -23,10 +24,24 @@ struct ProfileView: View {
     NavigationStack {
       List {
         Section {
-          ProfileHeaderRowView(
-            name: "Guest",
-            email: "Not signed in"
-          )
+          if session.isAuthenticated {
+            if let profile = session.profile {
+              ProfileHeaderRowView(
+                name: profile.displayName,
+                email: profile.email
+              )
+            } else {
+              ProfileHeaderRowView(
+                name: "Loading…",
+                email: "Fetching your profile"
+              )
+            }
+          } else {
+            ProfileHeaderRowView(
+              name: "Guest",
+              email: "Not signed in"
+            )
+          }
         }
 
         if !subscription.isPremium {
@@ -170,11 +185,12 @@ struct ProfileView: View {
         if showLogoutConfirm {
           CenteredConfirmationModal(
             title: "Log out?",
-            message: "This is a mock logout for now.",
+            message: "This will sign you out on this device.",
             confirmTitle: "Log out",
             isDestructive: true,
             onConfirm: {
               showLogoutConfirm = false
+              session.signOut()
               showLoggedOutAlert = true
             },
             onCancel: { showLogoutConfirm = false }
@@ -189,11 +205,9 @@ struct ProfileView: View {
       } message: {
         Text("Local data cleared on this device.")
       }
-      .alert("Logged out", isPresented: $showLoggedOutAlert) {
-        Button("OK", role: .cancel) {}
-      } message: {
-        Text("This is a mock logout for now.")
-      }
+    }
+    .task(id: session.isAuthenticated) {
+      await session.refreshProfileIfNeeded()
     }
   }
 

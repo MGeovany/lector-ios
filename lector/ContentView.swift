@@ -8,24 +8,36 @@
 import SwiftUI
 
 struct ContentView: View {
-    @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
-    
-    private var selectedScheme: ColorScheme {
-        AppTheme(rawValue: themeRawValue)?.colorScheme ?? .dark
-    }
+  @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
+  @State private var session = AppSession()
 
-    var body: some View {
+  private var selectedScheme: ColorScheme {
+    AppTheme(rawValue: themeRawValue)?.colorScheme ?? .dark
+  }
+
+  var body: some View {
+    ZStack {
+      if session.isAuthenticated {
         MainTabView()
-            // Apply the selected theme at the root *view* level so it reliably updates
-            // when AppStorage changes.
-            .preferredColorScheme(selectedScheme)
-            // Force the environment value too (more reliable across OS versions / containers).
-            .environment(\.colorScheme, selectedScheme)
+      } else {
+        WelcomeView()
+      }
     }
+    .onOpenURL { url in
+      Task { await session.handleOAuthCallback(url) }
+    }
+    // Apply the selected theme at the root *view* level so it reliably updates
+    // when AppStorage changes.
+    .preferredColorScheme(selectedScheme)
+    // Force the environment value too (more reliable across OS versions / containers).
+    .environment(\.colorScheme, selectedScheme)
+    .environment(session)
+  }
 }
 
 #Preview {
-    ContentView()
-        .environmentObject(PreferencesViewModel())
-        .environmentObject(SubscriptionStore())
+  ContentView()
+    .environment(AppSession())
+    .environmentObject(PreferencesViewModel())
+    .environmentObject(SubscriptionStore())
 }

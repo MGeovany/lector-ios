@@ -6,9 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
 		969C9A482F0C1A6E00EA0DB2 /* lector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lector.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F0A1B2C3D4E5F67890123456 /* FontRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontRegistrar.swift; path = lector/Utils/FontRegistrar.swift; sourceTree = SOURCE_ROOT; };

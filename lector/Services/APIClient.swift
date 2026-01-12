@@ -1,0 +1,173 @@
+import Foundation
+
+protocol AuthTokenProviding {
+  func bearerToken() -> String?
+}
+
+struct KeychainAuthTokenProvider: AuthTokenProviding {
+  func bearerToken() -> String? {
+    KeychainStore.getString(account: KeychainKeys.authToken)
+  }
+}
+
+enum APIError: LocalizedError, Equatable {
+  case missingAuthToken
+  case invalidResponse
+  case server(statusCode: Int, message: String)
+  case decoding
+  case network
+
+  var errorDescription: String? {
+    switch self {
+    case .missingAuthToken:
+      return
+        "Missing auth token. Set a Supabase access_token in Keychain (account '\(KeychainKeys.authToken)')."
+    case .invalidResponse:
+      return "Invalid server response."
+    case .server(_, let message):
+      return message
+    case .decoding:
+      return "Failed to decode server response."
+    case .network:
+      return "Network error."
+    }
+  }
+}
+
+private struct APIErrorEnvelope: Decodable {
+  let error: String
+}
+
+private struct EmptyResponse: Decodable {}
+
+final class APIClient {
+  private let baseURL: URL
+  private let session: URLSession
+  private let tokenProvider: AuthTokenProviding
+
+  init(
+    baseURL: URL = APIConfig.baseURL,
+    session: URLSession = .shared,
+    tokenProvider: AuthTokenProviding = KeychainAuthTokenProvider()
+  ) {
+    self.baseURL = baseURL
+    self.session = session
+    self.tokenProvider = tokenProvider
+  }
+
+  func get<T: Decodable>(_ path: String) async throws -> T {
+    var request = try makeRequest(path: path, method: "GET")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    return try await send(request, decode: T.self)
+  }
+
+  func postMultipart<T: Decodable>(
+    _ path: String,
+    fileData: Data,
+    fileName: String,
+    fieldName: String = "file",
+    mimeType: String = "application/pdf"
+  ) async throws -> T {
+    let boundary = "Boundary-\(UUID().uuidString)"
+    var request = try makeRequest(path: path, method: "POST")
+    request.setValue(
+      "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+    var body = Data()
+    body.appendString("--\(boundary)\r\n")
+    body.appendString(
+      "Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n")
+    body.appendString("Content-Type: \(mimeType)\r\n\r\n")
+    body.append(fileData)
+    body.appendString("\r\n--\(boundary)--\r\n")
+
+    request.httpBody = body
+    return try await send(request, decode: T.self)
+  }
+
+  func putJSON<T: Decodable, Body: Encodable>(_ path: String, body: Body) async throws -> T {
+    var request = try makeRequest(path: path, method: "PUT")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.httpBody = try JSONEncoder().encode(body)
+    return try await send(request, decode: T.self)
+  }
+
+  func putJSON<Body: Encodable>(_ path: String, body: Body) async throws {
+    _ = try await putJSON(path, body: body) as EmptyResponse
+  }
+
+  // MARK: - Internals
+
+  private func makeRequest(path: String, method: String) throws -> URLRequest {
+    guard let token = tokenProvider.bearerToken(), !token.isEmpty else {
+      throw APIError.missingAuthToken
+    }
+
+    let url = baseURL.appendingPathComponent(
+      path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+    var request = URLRequest(url: url)
+    request.httpMethod = method
+    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    request.timeoutInterval = 30
+    return request
+  }
+
+  private func send<T: Decodable>(_ request: URLRequest, decode: T.Type) async throws -> T {
+    do {
+      let (data, response) = try await session.data(for: request)
+      guard let http = response as? HTTPURLResponse else {
+        throw APIError.invalidResponse
+      }
+
+      if !(200...299).contains(http.statusCode) {
+        let message: String =
+          (try? JSONDecoder().decode(APIErrorEnvelope.self, from: data).error)
+          ?? String(data: data, encoding: .utf8)
+          ?? "Request failed."
+        throw APIError.server(statusCode: http.statusCode, message: message)
+      }
+
+      do {
+        return try APIClient.jsonDecoder.decode(T.self, from: data)
+      } catch {
+        throw APIError.decoding
+      }
+    } catch let apiError as APIError {
+      throw apiError
+    } catch {
+      throw APIError.network
+    }
+  }
+
+  private static let jsonDecoder: JSONDecoder = {
+    let decoder = JSONDecoder()
+
+    // RFC3339 / RFC3339Nano (with/without fractional seconds)
+    let base = ISO8601DateFormatter()
+    base.formatOptions = [.withInternetDateTime]
+
+    let fractional = ISO8601DateFormatter()
+    fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+    decoder.dateDecodingStrategy = .custom { decoder in
+      let container = try decoder.singleValueContainer()
+      let str = try container.decode(String.self)
+      if let d = fractional.date(from: str) ?? base.date(from: str) {
+        return d
+      }
+      throw DecodingError.dataCorruptedError(
+        in: container, debugDescription: "Invalid date: \(str)")
+    }
+
+    return decoder
+  }()
+}
+
+extension Data {
+  fileprivate mutating func appendString(_ string: String) {
+    if let data = string.data(using: .utf8) {
+      append(data)
+    }
+  }
+}
