@@ -10,29 +10,49 @@ struct BookCardView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack(alignment: .top, spacing: 14) {
-        cover
+        // cover
 
         VStack(alignment: .leading, spacing: 6) {
           Text(book.title.uppercased())
-            .font(.system(size: 22, weight: .bold))
+            .font(.parkinsansMedium(size: 42))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : .primary)
             .lineLimit(2)
 
           Text(book.author)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
+            .font(.parkinsansSemibold(size: 20))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.30) : .secondary)
+            .padding(.bottom, 10)
 
-          Text("\(book.pagesTotal) pages • \(formatBytes(book.sizeBytes))")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
+          /*   Label(
+            "\(book.lastOpenedDaysAgo)d ago • \(formatBytes(book.sizeBytes))",
+            systemImage: "calendar"
+          )
+          .font(.parkinsansSemibold(size: 13))
+          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+ */
+
+          HStack(spacing: 6) {
+
+            Label(
+              "\(book.lastOpenedDaysAgo)d ago | ",
+              systemImage: "calendar"
+            )
+            .font(.parkinsansSemibold(size: 13))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+
+            Label("\(book.currentPage) of \(book.pagesTotal)", systemImage: "book")
+              .font(.parkinsansSemibold(size: 13))
+              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+
+          }
         }
 
         Spacer()
 
-        HStack(spacing: 6) {
+        HStack(spacing: 2) {
           Button(action: onToggleFavorite) {
             Image(systemName: book.isFavorite ? "heart.fill" : "heart")
-              .font(.system(size: 16, weight: .semibold))
+              .font(.parkinsansSemibold(size: 16))
               .foregroundStyle(
                 book.isFavorite
                   ? Color.red.opacity(0.90)
@@ -74,7 +94,7 @@ struct BookCardView: View {
             }
           } label: {
             Image(systemName: "ellipsis")
-              .font(.system(size: 18, weight: .semibold))
+              .font(.parkinsansSemibold(size: 18))
               .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.70) : .secondary)
               .frame(width: 36, height: 36)
               .contentShape(Rectangle())
@@ -83,19 +103,16 @@ struct BookCardView: View {
       }
 
       HStack(spacing: 14) {
-        Label("\(book.lastOpenedDaysAgo)d ago", systemImage: "calendar")
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+        /*   Label("Page \(book.currentPage) of \(book.pagesTotal)", systemImage: "book")
+            .font(.parkinsansSemibold(size: 13))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+        
+          Spacer() */
 
-        Label("Page \(book.currentPage) of \(book.pagesTotal)", systemImage: "book")
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
-
-        Spacer()
-
-        Text("\(Int((book.progress * 100).rounded()))%")
-          .font(.system(size: 13, weight: .bold))
+        Text("Progress: \(Int((book.progress * 100).rounded()))%")
+          .font(.parkinsansBold(size: 13))
           .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .primary)
+
       }
 
       ProgressBarView(progress: book.progress)
@@ -115,33 +132,33 @@ struct BookCardView: View {
     .onTapGesture(perform: onOpen)
   }
 
-  private var cover: some View {
-    ZStack {
-      let lightTint = AppColors.matteBlack
-      RoundedRectangle(cornerRadius: 14, style: .continuous)
-        .fill(
-          LinearGradient(
-            colors: [
-              (colorScheme == .dark ? Color.white.opacity(0.18) : lightTint.opacity(0.18)),
-              (colorScheme == .dark ? Color.white.opacity(0.06) : lightTint.opacity(0.06)),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
+  /*   private var cover: some View {
+      ZStack {
+        let lightTint = AppColors.matteBlack
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .fill(
+            LinearGradient(
+              colors: [
+                (colorScheme == .dark ? Color.white.opacity(0.18) : lightTint.opacity(0.18)),
+                (colorScheme == .dark ? Color.white.opacity(0.06) : lightTint.opacity(0.06)),
+              ],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
           )
-        )
-        .overlay(
-          RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .stroke(
-              colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5),
-              lineWidth: 1)
-        )
-
-      Text(initials(from: book.title))
-        .font(.system(size: 16, weight: .bold))
-        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .primary)
-    }
-    .frame(width: 56, height: 72)
-  }
+          .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+              .stroke(
+                colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5),
+                lineWidth: 1)
+          )
+  
+        Text(initials(from: book.title))
+          .font(.parkinsansBold(size: 16))
+          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .primary)
+      }
+      .frame(width: 56, height: 72)
+    } */
 
   private func initials(from title: String) -> String {
     let parts =

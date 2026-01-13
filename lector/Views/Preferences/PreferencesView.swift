@@ -73,7 +73,7 @@ struct PreferencesView: View {
               HStack(spacing: 10) {
                 Image(systemName: "arrow.counterclockwise")
                 Text("Restore defaults")
-                  .font(.system(size: 14, weight: .semibold))
+                  .font(.parkinsansSemibold(size: 14))
               }
               .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.88) : .red)
               .frame(maxWidth: .infinity)
@@ -109,7 +109,7 @@ struct PreferencesView: View {
               Image(systemName: "checkmark.circle.fill")
               Text("Save")
             }
-            .font(.system(size: 14, weight: .semibold))
+            .font(.parkinsansSemibold(size: 14))
           }
           .disabled(!viewModel.hasChanges)
         }
@@ -121,12 +121,12 @@ struct PreferencesView: View {
     VStack(alignment: .leading, spacing: 10) {
 
       Text("Reading preferences")
-        .font(.system(size: 34, weight: .bold))
+        .font(.parkinsansBold(size: 34))
         .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
         .kerning(-0.2)
 
       Text("Set your default typography theme.")
-        .font(.system(size: 15, weight: .semibold))
+        .font(.parkinsansSemibold(size: 15))
         .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
         .fixedSize(horizontal: false, vertical: true)
         .lineSpacing(2)
@@ -177,17 +177,17 @@ private struct PreferenceSectionCard<Content: View>: View {
     VStack(alignment: .leading, spacing: 14) {
       HStack(alignment: .firstTextBaseline, spacing: 10) {
         Image(systemName: icon)
-          .font(.system(size: 16, weight: .semibold))
+          .font(.parkinsansSemibold(size: 16))
           .foregroundStyle(
             colorScheme == .dark ? Color.white.opacity(0.85) : AppColors.matteBlack.opacity(0.85))
 
         VStack(alignment: .leading, spacing: 4) {
           Text(title)
-            .font(.system(size: 16, weight: .bold))
+            .font(.parkinsansBold(size: 16))
             .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
 
           Text(subtitle)
-            .font(.system(size: 13, weight: .semibold))
+            .font(.parkinsansSemibold(size: 13))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
             .fixedSize(horizontal: false, vertical: true)
         }

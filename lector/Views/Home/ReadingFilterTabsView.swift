@@ -3,14 +3,20 @@ import SwiftUI
 struct ReadingFilterTabsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var filter: ReadingFilter
-    let unreadCount: Int
 
     var body: some View {
         HStack(spacing: 10) {
             SegmentedTabButton(
-                title: "Unread (\(unreadCount))",
-                isSelected: filter == .unread,
-                onTap: { filter = .unread },
+                title: "Recents",
+                isSelected: filter == .recents,
+                onTap: { filter = .recents },
+                colorScheme: colorScheme
+            )
+
+            SegmentedTabButton(
+                title: "All",
+                isSelected: filter == .all,
+                onTap: { filter = .all },
                 colorScheme: colorScheme
             )
 
@@ -42,7 +48,7 @@ private struct SegmentedTabButton: View {
     var body: some View {
         Button(action: onTap) {
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.parkinsansSemibold(size: 14))
                 .foregroundStyle(
                     isSelected
                     ? (colorScheme == .dark ? Color.black : .primary)
@@ -64,7 +70,7 @@ private struct SegmentedTabButton: View {
 }
 
 #Preview {
-    ReadingFilterTabsView(filter: .constant(.unread), unreadCount: 1)
+    ReadingFilterTabsView(filter: .constant(.all))
         .padding()
 }
 

@@ -61,6 +61,13 @@ final class APIClient {
     return try await send(request, decode: T.self)
   }
 
+  func get<T: Decodable>(_ path: String, queryItems: [URLQueryItem]) async throws -> T {
+    let url = try makeURL(path: path, queryItems: queryItems)
+    var request = try makeRequest(url: url, method: "GET")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    return try await send(request, decode: T.self)
+  }
+
   func postMultipart<T: Decodable>(
     _ path: String,
     fileData: Data,
@@ -100,17 +107,34 @@ final class APIClient {
   // MARK: - Internals
 
   private func makeRequest(path: String, method: String) throws -> URLRequest {
+    let url = baseURL.appendingPathComponent(
+      path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+    return try makeRequest(url: url, method: method)
+  }
+
+  private func makeRequest(url: URL, method: String) throws -> URLRequest {
     guard let token = tokenProvider.bearerToken(), !token.isEmpty else {
       throw APIError.missingAuthToken
     }
 
-    let url = baseURL.appendingPathComponent(
-      path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
     var request = URLRequest(url: url)
     request.httpMethod = method
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     request.timeoutInterval = 30
     return request
+  }
+
+  private func makeURL(path: String, queryItems: [URLQueryItem]) throws -> URL {
+    let base = baseURL.appendingPathComponent(
+      path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+    guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
+      throw APIError.invalidResponse
+    }
+    components.queryItems = queryItems.isEmpty ? nil : queryItems
+    guard let url = components.url else {
+      throw APIError.invalidResponse
+    }
+    return url
   }
 
   private func send<T: Decodable>(_ request: URLRequest, decode: T.Type) async throws -> T {
@@ -161,6 +185,15 @@ final class APIClient {
     }
 
     return decoder
+  }()
+}
+
+extension ISO8601DateFormatter {
+  /// RFC3339 without fractional seconds (safe default for query params).
+  static let lectorInternetDateTime: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime]
+    return f
   }()
 }
 

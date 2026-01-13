@@ -17,11 +17,11 @@ struct CenteredConfirmationModal: View {
 
       VStack(alignment: .leading, spacing: 10) {
         Text(title)
-          .font(.system(size: 17, weight: .semibold))
+          .font(.parkinsansSemibold(size: 17))
           .foregroundStyle(.primary)
 
         Text(message)
-          .font(.system(size: 14, weight: .regular))
+          .font(.parkinsans(size: 14))
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
 
@@ -60,7 +60,7 @@ private struct CenteredModalButtonStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(.system(size: 15, weight: .semibold))
+      .font(.parkinsansSemibold(size: 15))
       .foregroundStyle(foregroundStyle)
       .frame(maxWidth: .infinity)
       .padding(.vertical, 12)

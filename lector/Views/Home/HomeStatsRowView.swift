@@ -43,7 +43,7 @@ private struct StatCard: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.parkinsansSemibold(size: 14))
                 .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .secondary)
                 .frame(width: 26, height: 26)
                 .background(
@@ -53,11 +53,11 @@ private struct StatCard: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.parkinsansSemibold(size: 12))
                     .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
                 Text(value)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.parkinsansSemibold(size: 14))
                     .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.90) : .primary)
                     .lineLimit(1)
             }

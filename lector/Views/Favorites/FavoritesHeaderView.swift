@@ -16,13 +16,13 @@ struct FavoritesHeaderView: View {
       HStack(alignment: .firstTextBaseline, spacing: 10) {
 
         Text("Favorites")
-          .font(.system(size: 32, weight: .bold))
+          .font(.parkinsansBold(size: 32))
           .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
 
         Spacer(minLength: 0)
 
         Text("\(filteredFavorites.count)")
-          .font(.system(size: 14, weight: .bold))
+          .font(.parkinsansBold(size: 14))
           .foregroundStyle(
             colorScheme == .dark ? Color.white.opacity(0.65) : AppColors.matteBlack.opacity(0.65)
           )
@@ -44,7 +44,7 @@ struct FavoritesHeaderView: View {
       }
 
       Text("Saved picks you can jump back into anytime.")
-        .font(.system(size: 14, weight: .semibold))
+        .font(.parkinsansSemibold(size: 14))
         .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
         .fixedSize(horizontal: false, vertical: true)
     }

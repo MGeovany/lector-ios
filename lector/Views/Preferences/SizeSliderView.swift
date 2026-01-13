@@ -12,11 +12,11 @@ struct SizeSliderView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(title)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.parkinsansBold(size: 13))
                     .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : AppColors.matteBlack.opacity(0.85))
                 Spacer()
                 Text(valueText(value))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.parkinsansSemibold(size: 13))
                     .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
             }
 

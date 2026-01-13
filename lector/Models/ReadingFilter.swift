@@ -8,7 +8,8 @@
 import Foundation
 
 enum ReadingFilter: String, CaseIterable {
-    case unread = "Unread"
+    case recents = "Recents"
+    case all = "All"
     case read = "Read"
 }
 

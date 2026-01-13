@@ -9,10 +9,10 @@ struct FontChipView: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(option.title)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.parkinsansBold(size: 14))
                     .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
                 Text(option.subtitle)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.parkinsansSemibold(size: 12))
                     .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
             }
 

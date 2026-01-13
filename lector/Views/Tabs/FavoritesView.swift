@@ -106,7 +106,7 @@ struct FavoritesView: View {
           systemName: query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "heart" : "magnifyingglass"
         )
-        .font(.system(size: 22, weight: .semibold))
+        .font(.parkinsansSemibold(size: 22))
         .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.90) : .secondary)
       }
 
@@ -115,7 +115,7 @@ struct FavoritesView: View {
           query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "No favorites yet" : "No matches"
         )
-        .font(.system(size: 18, weight: .bold))
+        .font(.parkinsansBold(size: 18))
         .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : .primary)
 
         Text(
@@ -123,7 +123,7 @@ struct FavoritesView: View {
             ? "Save books you love to find them faster here."
             : "Try a different search."
         )
-        .font(.system(size: 14, weight: .semibold))
+        .font(.parkinsansSemibold(size: 14))
         .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
         .multilineTextAlignment(.center)
       }
@@ -135,7 +135,7 @@ struct FavoritesView: View {
           }
         } label: {
           Label("Reset", systemImage: "arrow.counterclockwise")
-            .font(.system(size: 15, weight: .semibold))
+            .font(.parkinsansSemibold(size: 15))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.90) : .primary)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -184,7 +184,7 @@ private struct FavoritesSearchBar: View {
   var body: some View {
     HStack(spacing: 10) {
       Image(systemName: "magnifyingglass")
-        .font(.system(size: 15, weight: .semibold))
+        .font(.parkinsansSemibold(size: 15))
         .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
       TextField("Search favorites", text: $text)
@@ -192,7 +192,7 @@ private struct FavoritesSearchBar: View {
         .textInputAutocapitalization(.never)
         .disableAutocorrection(true)
         .submitLabel(.search)
-        .font(.system(size: 15, weight: .semibold))
+        .font(.parkinsansSemibold(size: 15))
         .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : .primary)
 
       if !text.isEmpty {
@@ -200,7 +200,7 @@ private struct FavoritesSearchBar: View {
           text = ""
         } label: {
           Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 16, weight: .semibold))
+            .font(.parkinsansSemibold(size: 16))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
             .contentShape(Rectangle())
         }

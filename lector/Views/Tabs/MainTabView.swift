@@ -107,7 +107,7 @@ struct TabBarItemButton: View {
         TabBarIconView(icon: icon, isSelected: isSelected)
 
         Text(title)
-          .font(.system(size: 10, weight: .bold))
+          .font(.parkinsansBold(size: 10))
           .foregroundStyle(
             isSelected
               ? AppColors.tabSelected(for: colorScheme) : AppColors.tabUnselected(for: colorScheme))
@@ -135,7 +135,7 @@ struct TabBarIconView: View {
     switch icon {
     case .system(let name):
       Image(systemName: name)
-        .font(.system(size: 20, weight: .regular))
+        .font(.parkinsans(size: 20))
         .foregroundStyle(foreground)
 
     case .asset(let name):
@@ -170,7 +170,7 @@ struct TabBarIconView: View {
         )
       } else {
         Image(systemName: "person.crop.circle")
-          .font(.system(size: 20, weight: .regular))
+          .font(.parkinsans(size: 20))
           .foregroundStyle(foreground)
       }
     }
