@@ -52,6 +52,16 @@ final class ReaderViewModel: ObservableObject {
 
     do {
       let doc = try await documentsService.getDocument(id: id)
+      // Prefer backend page boundaries to match the web reader exactly.
+      // If blocks don't have meaningful page numbers, fall back to local pagination.
+      let pagesByBackend = Self.pagesPreservingBackendPages(doc.content)
+      if pagesByBackend.count > 1
+        || (pagesByBackend.first?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+      {
+        setPages(pagesByBackend, initialPage: book.currentPage)
+        return
+      }
+
       let text = Self.flattenContent(doc.content)
 
       // If the backend returns an empty/omitted content array (or it flattens to empty),
@@ -68,6 +78,42 @@ final class ReaderViewModel: ObservableObject {
       loadErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to load document."
       setPages([""], initialPage: 1)
     }
+  }
+
+  private static func pagesPreservingBackendPages(_ blocks: [RemoteContentBlock]) -> [String] {
+    guard !blocks.isEmpty else { return [] }
+
+    // Group by page_number (ignoring 0/negative which are usually "unknown").
+    let valid = blocks.filter { $0.pageNumber > 0 }
+    guard !valid.isEmpty else { return [] }
+
+    let grouped = Dictionary(grouping: valid) { $0.pageNumber }
+    let pageNumbers = grouped.keys.sorted()
+
+    var pages: [String] = []
+    pages.reserveCapacity(pageNumbers.count)
+
+    for n in pageNumbers {
+      let pageBlocks = (grouped[n] ?? []).sorted { $0.position < $1.position }
+      var out: [String] = []
+      out.reserveCapacity(pageBlocks.count)
+
+      for b in pageBlocks {
+        let trimmed = b.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { continue }
+        switch b.type.lowercased() {
+        case "heading":
+          out.append(trimmed.uppercased())
+        default:
+          out.append(trimmed)
+        }
+      }
+
+      let pageText = out.joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
+      pages.append(pageText.isEmpty ? " " : pageText)
+    }
+
+    return pages.isEmpty ? [""] : pages
   }
 
   private static func flattenContent(_ blocks: [RemoteContentBlock]) -> String {
@@ -87,7 +133,7 @@ final class ReaderViewModel: ObservableObject {
 
       switch b.type.lowercased() {
       case "heading":
-        out.append("\n\(trimmed.uppercased())\n")
+        out.append(trimmed.uppercased())
       default:
         out.append(trimmed)
       }

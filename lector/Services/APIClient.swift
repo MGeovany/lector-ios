@@ -44,15 +44,18 @@ final class APIClient {
   private let baseURL: URL
   private let session: URLSession
   private let tokenProvider: AuthTokenProviding
+  private let authService: SupabaseAuthServicing
 
   init(
     baseURL: URL = APIConfig.baseURL,
     session: URLSession = .shared,
-    tokenProvider: AuthTokenProviding = KeychainAuthTokenProvider()
+    tokenProvider: AuthTokenProviding = KeychainAuthTokenProvider(),
+    authService: SupabaseAuthServicing = SupabaseAuthService()
   ) {
     self.baseURL = baseURL
     self.session = session
     self.tokenProvider = tokenProvider
+    self.authService = authService
   }
 
   func get<T: Decodable>(_ path: String) async throws -> T {
@@ -155,6 +158,14 @@ final class APIClient {
   }
 
   private func send<T: Decodable>(_ request: URLRequest, decode: T.Type) async throws -> T {
+    try await send(request, decode: decode, didRetryAfterRefresh: false)
+  }
+
+  private func send<T: Decodable>(
+    _ request: URLRequest,
+    decode: T.Type,
+    didRetryAfterRefresh: Bool
+  ) async throws -> T {
     do {
       let (data, response) = try await session.data(for: request)
       guard let http = response as? HTTPURLResponse else {
@@ -162,6 +173,15 @@ final class APIClient {
       }
 
       if !(200...299).contains(http.statusCode) {
+        // Attempt a single refresh+retry on auth failures.
+        if http.statusCode == 401, !didRetryAfterRefresh {
+          if let refreshed = try? await refreshAccessTokenIfPossible() {
+            var retry = request
+            retry.setValue("Bearer \(refreshed)", forHTTPHeaderField: "Authorization")
+            return try await send(retry, decode: decode, didRetryAfterRefresh: true)
+          }
+        }
+
         let message: String =
           (try? JSONDecoder().decode(APIErrorEnvelope.self, from: data).error)
           ?? String(data: data, encoding: .utf8)
@@ -179,6 +199,19 @@ final class APIClient {
     } catch {
       throw APIError.network
     }
+  }
+
+  private func refreshAccessTokenIfPossible() async throws -> String? {
+    let refresh = KeychainStore.getString(account: KeychainKeys.refreshToken) ?? ""
+    guard !refresh.isEmpty else { return nil }
+
+    let newSession = try await authService.refreshSession(refreshToken: refresh)
+    KeychainStore.setString(newSession.accessToken, account: KeychainKeys.authToken)
+    if let newRefresh = newSession.refreshToken, !newRefresh.isEmpty {
+      KeychainStore.setString(newRefresh, account: KeychainKeys.refreshToken)
+    }
+    KeychainStore.setString(newSession.userID, account: KeychainKeys.userID)
+    return newSession.accessToken
   }
 
   private static let jsonDecoder: JSONDecoder = {

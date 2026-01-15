@@ -1,8 +1,12 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct HomeView: View {
   @Environment(\.colorScheme) private var colorScheme
   @State private var viewModel: HomeViewModel
+  @State private var addViewModel: AddViewModel = AddViewModel()
+  @State private var showFilePicker: Bool = false
+  @State private var pickedURL: URL?
 
   init(viewModel: HomeViewModel? = nil) {
     _viewModel = State(initialValue: viewModel ?? HomeViewModel())
@@ -15,16 +19,19 @@ struct HomeView: View {
 
         ScrollView(showsIndicators: false) {
           VStack(alignment: .leading, spacing: 16) {
-            HomeHeaderView()
+            HomeHeaderView(onAddTapped: { showFilePicker = true })
 
             // Filter buttons: Recents, All, Read
-            FilterTabsView(
-              filter: $viewModel.filter,
-              colorScheme: colorScheme,
-              onFilterChange: {
-                Task { await viewModel.reload() }
-              }
-            )
+            // (Temporarily hidden per design review; keep logic intact.)
+            if false {
+              FilterTabsView(
+                filter: $viewModel.filter,
+                colorScheme: colorScheme,
+                onFilterChange: {
+                  Task { await viewModel.reload() }
+                }
+              )
+            }
 
             // HomeStatsRowView(
             //   documentsCount: viewModel.books.count,
@@ -32,17 +39,22 @@ struct HomeView: View {
             //   maxStorageText: "\(MAX_STORAGE_MB) MB"
             // )
 
-            LazyVStack(spacing: 14) {
-              ForEach(viewModel.filteredBooks) { book in
-                BookCardView(
-                  book: book,
-                  onOpen: { viewModel.selectedBook = book },
-                  onToggleRead: { viewModel.toggleRead(bookID: book.id) },
-                  onToggleFavorite: { viewModel.toggleFavorite(bookID: book.id) }
-                )
+            if viewModel.filteredBooks.isEmpty && viewModel.isLoading {
+              HomeSkeletonList()
+                .padding(.top, 6)
+            } else {
+              LazyVStack(spacing: 14) {
+                ForEach(viewModel.filteredBooks) { book in
+                  BookCardView(
+                    book: book,
+                    onOpen: { viewModel.selectedBook = book },
+                    onToggleRead: { viewModel.toggleRead(bookID: book.id) },
+                    onToggleFavorite: { viewModel.toggleFavorite(bookID: book.id) }
+                  )
+                }
               }
+              .padding(.top, 6)
             }
-            .padding(.top, 6)
           }
           .padding(.horizontal, 18)
           .padding(.top, 14)
@@ -50,17 +62,6 @@ struct HomeView: View {
         }
         .refreshable {
           await viewModel.reload()
-        }
-
-        if viewModel.isLoading {
-          ZStack {
-            Color.black.opacity(colorScheme == .dark ? 0.35 : 0.15)
-              .ignoresSafeArea()
-            ProgressView("Loading…")
-              .padding()
-              .background(.ultraThinMaterial)
-              .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-          }
         }
       }
       .toolbar(.hidden, for: .navigationBar)
@@ -85,6 +86,57 @@ struct HomeView: View {
       }
       .onAppear { viewModel.onAppear() }
       .environment(viewModel)
+    }
+    .fileImporter(
+      isPresented: $showFilePicker,
+      allowedContentTypes: [UTType.pdf],
+      allowsMultipleSelection: false
+    ) { result in
+      switch result {
+      case .success(let urls):
+        if let url = urls.first {
+          Task { await addViewModel.uploadPickedPDF(url) }
+        }
+      case .failure(let error):
+        viewModel.alertMessage = error.localizedDescription
+      }
+    }
+    .overlay(alignment: .top) {
+      // Subtle, non-blocking loading indicator.
+      if viewModel.isLoading && !viewModel.filteredBooks.isEmpty {
+        ProgressView()
+          .tint(colorScheme == .dark ? Color.white.opacity(0.85) : AppColors.matteBlack)
+          .padding(.top, 8)
+      }
+    }
+    .overlay(alignment: .bottom) {
+      if addViewModel.isUploading {
+        HStack(spacing: 10) {
+          ProgressView()
+          Text("Uploading…")
+            .font(.system(size: 13, weight: .semibold))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+        .padding(.bottom, 86)
+      }
+    }
+    .alert(
+      "Upload",
+      isPresented: Binding(
+        get: { addViewModel.alertMessage != nil || addViewModel.didUploadSuccessfully },
+        set: { newValue in
+          if !newValue {
+            addViewModel.alertMessage = nil
+            addViewModel.didUploadSuccessfully = false
+          }
+        }
+      )
+    ) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(addViewModel.alertMessage ?? (addViewModel.didUploadSuccessfully ? "Uploaded." : ""))
     }
   }
 
@@ -113,6 +165,61 @@ struct HomeView: View {
     }
   }
 
+}
+
+// MARK: - Skeletons (Home)
+
+private struct HomeSkeletonList: View {
+  var body: some View {
+    VStack(spacing: 14) {
+      ForEach(0..<4, id: \.self) { _ in
+        HomeSkeletonCard()
+          .frame(height: 160)
+      }
+    }
+  }
+}
+
+private struct HomeSkeletonCard: View {
+  @Environment(\.colorScheme) private var colorScheme
+  @State private var phase: CGFloat = -0.8
+
+  var body: some View {
+    let base = RoundedRectangle(cornerRadius: 20, style: .continuous)
+    base
+      .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color(.secondarySystemBackground))
+      .overlay(
+        base
+          .stroke(
+            colorScheme == .dark ? Color.white.opacity(0.08) : Color(.separator).opacity(0.18),
+            lineWidth: 1
+          )
+      )
+      .overlay(
+        GeometryReader { geo in
+          LinearGradient(
+            colors: [
+              Color.white.opacity(0.00),
+              Color.white.opacity(colorScheme == .dark ? 0.10 : 0.35),
+              Color.white.opacity(0.00),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+          )
+          .rotationEffect(.degrees(18))
+          .frame(width: geo.size.width * 0.7)
+          .offset(x: geo.size.width * phase)
+        }
+        .clipShape(base)
+        .allowsHitTesting(false)
+        .opacity(colorScheme == .dark ? 1 : 0.6)
+      )
+      .onAppear {
+        withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
+          phase = 1.2
+        }
+      }
+  }
 }
 
 // MARK: - Filter Tabs with Animation
@@ -187,6 +294,60 @@ struct FilterTabsView: View {
                 ? Color.white.opacity(0.10) : Color(.separator).opacity(0.35), lineWidth: 1)
         )
     )
+  }
+
+  // MARK: - Skeletons
+
+  private struct HomeSkeletonList: View {
+    var body: some View {
+      VStack(spacing: 14) {
+        ForEach(0..<4, id: \.self) { _ in
+          SkeletonCard()
+            .frame(height: 160)
+        }
+      }
+    }
+  }
+
+  private struct SkeletonCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var phase: CGFloat = -0.8
+
+    var body: some View {
+      let base = RoundedRectangle(cornerRadius: 20, style: .continuous)
+      base
+        .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color(.secondarySystemBackground))
+        .overlay(
+          base
+            .stroke(
+              colorScheme == .dark ? Color.white.opacity(0.08) : Color(.separator).opacity(0.18),
+              lineWidth: 1)
+        )
+        .overlay(
+          GeometryReader { geo in
+            LinearGradient(
+              colors: [
+                Color.white.opacity(0.00),
+                Color.white.opacity(colorScheme == .dark ? 0.10 : 0.35),
+                Color.white.opacity(0.00),
+              ],
+              startPoint: .top,
+              endPoint: .bottom
+            )
+            .rotationEffect(.degrees(18))
+            .frame(width: geo.size.width * 0.7)
+            .offset(x: geo.size.width * phase)
+          }
+          .clipShape(base)
+          .allowsHitTesting(false)
+          .opacity(colorScheme == .dark ? 1 : 0.6)
+        )
+        .onAppear {
+          withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
+            phase = 1.2
+          }
+        }
+    }
   }
 }
 

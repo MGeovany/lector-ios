@@ -4,6 +4,7 @@ struct HomeHeaderView: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(AppSession.self) private var session
   @State private var searchText: String = ""
+  var onAddTapped: (() -> Void)? = nil
 
   var body: some View {
     VStack(alignment: .center, spacing: 10) {
@@ -52,7 +53,7 @@ struct HomeHeaderView: View {
           Spacer()
 
           Button(action: {
-            // Handle add PDF action
+            onAddTapped?()
           }) {
             Image(systemName: "plus")
               .padding(.top, 14)
@@ -71,16 +72,14 @@ struct HomeHeaderView: View {
         HStack(spacing: 10) {
           Image(systemName: "magnifyingglass")
             .font(.parkinsansMedium(size: 16))
-            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.95) : .secondary)
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
           TextField("Search", text: $searchText)
             .font(.parkinsansMedium(size: 16))
             .foregroundStyle(
-              colorScheme == .dark ? Color.white.opacity(0.22) : AppColors.matteBlack
+              colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack
             )
-            .foregroundStyle(
-              colorScheme == .dark ? Color.white.opacity(0.22) : .secondary
-            )
+            .tint(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
             .textInputAutocapitalization(.never)
             .disableAutocorrection(true)
         }
@@ -89,12 +88,12 @@ struct HomeHeaderView: View {
         .background(
 
           RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(colorScheme == .dark ? Color.white.opacity(0.80) : Color.white)
+            .fill(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.systemBackground))
         )
         .overlay(
           RoundedRectangle(cornerRadius: 16, style: .continuous)
             .stroke(
-              colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5),
+              colorScheme == .dark ? Color.white.opacity(0.14) : Color(.separator).opacity(0.35),
               lineWidth: 1)
         )
       }

@@ -8,6 +8,7 @@ enum ProfilePlanBadge: Equatable {
 struct ProfileHeaderRowView: View {
     let name: String
     let email: String
+    var avatarURL: URL? = nil
     var badge: ProfilePlanBadge? = nil
 
     var body: some View {
@@ -17,9 +18,26 @@ struct ProfileHeaderRowView: View {
                     .fill(Color(.secondarySystemBackground))
                     .frame(width: 54, height: 54)
 
-                Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 34, weight: .regular))
-                    .foregroundStyle(.secondary)
+                if let avatarURL {
+                    AsyncImage(url: avatarURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        default:
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(.system(size: 34, weight: .regular))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(width: 54, height: 54)
+                    .clipShape(Circle())
+                } else {
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 34, weight: .regular))
+                        .foregroundStyle(.secondary)
+                }
             }
             .overlay(alignment: .bottomTrailing) {
                 if let badge {
@@ -66,7 +84,12 @@ struct ProfileHeaderRowView: View {
     NavigationStack {
         List {
             Section {
-                ProfileHeaderRowView(name: "Ronald Richards", email: "ronaldrichards@gmail.com", badge: .pro)
+                ProfileHeaderRowView(
+                    name: "Ronald Richards",
+                    email: "ronaldrichards@gmail.com",
+                    avatarURL: URL(string: "https://example.com/avatar.png"),
+                    badge: .pro
+                )
             }
         }
         .listStyle(.insetGrouped)

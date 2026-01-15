@@ -13,17 +13,21 @@ final class HomeViewModel {
   var alertMessage: String?
 
   private let documentsService: DocumentsServicing
+  private let readingPositionService: ReadingPositionServicing
   private let userID: String
   private var didLoadOnce: Bool = false
   @ObservationIgnored private var documentsChangedObserver: NSObjectProtocol?
+  @ObservationIgnored private var pendingReadingPositionTasks: [String: Task<Void, Never>] = [:]
 
   init(
     documentsService: DocumentsServicing? = nil,
+    readingPositionService: ReadingPositionServicing? = nil,
     userID: String? = nil
   ) {
     // Default arguments are evaluated outside actor isolation.
     // Doing the fallback inside the initializer avoids Swift 6 actor-isolation warnings.
     self.documentsService = documentsService ?? GoDocumentsService()
+    self.readingPositionService = readingPositionService ?? GoReadingPositionService()
     self.userID =
       userID ?? KeychainStore.getString(account: KeychainKeys.userID) ?? APIConfig.defaultUserID
   }
@@ -61,10 +65,11 @@ final class HomeViewModel {
       case .all, .read:
         docs = try await documentsService.getDocumentsByUserID(userID)
       }
-      books =
+      let next =
         docs
         .map(Book.init(remoteDocument:))
         .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+      books = next
     } catch {
       alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to load documents."
     }
@@ -221,6 +226,8 @@ final class HomeViewModel {
           documentID: remoteID,
           isFavorite: books[idx].isFavorite
         )
+        // Keep other tabs / lists in sync.
+        NotificationCenter.default.post(name: .documentsDidChange, object: nil)
       } catch {
         // Revert on failure.
         if let retryIdx = books.firstIndex(where: { $0.id == bookID }) {
@@ -237,6 +244,26 @@ final class HomeViewModel {
     books[idx].pagesTotal = max(1, totalPages)
     books[idx].currentPage = min(max(1, page), books[idx].pagesTotal)
     books[idx].isRead = (books[idx].currentPage >= books[idx].pagesTotal)
+
+    guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else { return }
+
+    // Debounce network updates so we don't spam the backend while the user flips pages quickly.
+    pendingReadingPositionTasks[remoteID]?.cancel()
+    let pageNumber = books[idx].currentPage
+    let progress = min(1.0, max(0.0, Double(pageNumber) / Double(max(1, books[idx].pagesTotal))))
+    pendingReadingPositionTasks[remoteID] = Task { [weak self] in
+      try? await Task.sleep(nanoseconds: 650_000_000)  // ~0.65s
+      guard let self else { return }
+      do {
+        try await self.readingPositionService.updateReadingPosition(
+          documentID: remoteID,
+          pageNumber: pageNumber,
+          progress: progress
+        )
+      } catch {
+        // Non-blocking: keep UX smooth even if the backend fails.
+      }
+    }
   }
 
   var filteredBooks: [Book] {

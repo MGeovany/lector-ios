@@ -19,6 +19,9 @@ struct RemoteDocument: Codable, Hashable {
   /// Backend-managed favorite flag.
   let isFavorite: Bool
 
+  /// Optional reading progress returned by some endpoints.
+  let readingPosition: RemoteReadingPosition?
+
   let createdAt: Date
   let updatedAt: Date
 
@@ -32,6 +35,7 @@ struct RemoteDocument: Codable, Hashable {
     case metadata
     case tag
     case isFavorite = "is_favorite"
+    case readingPosition = "reading_position"
     case createdAt = "created_at"
     case updatedAt = "updated_at"
   }
@@ -47,8 +51,19 @@ struct RemoteDocument: Codable, Hashable {
     metadata = try container.decode(RemoteDocumentMetadata.self, forKey: .metadata)
     tag = try container.decodeIfPresent(String.self, forKey: .tag)
     isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+    readingPosition = try container.decodeIfPresent(RemoteReadingPosition.self, forKey: .readingPosition)
     createdAt = try container.decode(Date.self, forKey: .createdAt)
     updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+  }
+}
+
+struct RemoteReadingPosition: Codable, Hashable {
+  let progress: Double?
+  let pageNumber: Int?
+
+  enum CodingKeys: String, CodingKey {
+    case progress
+    case pageNumber = "page_number"
   }
 }
 

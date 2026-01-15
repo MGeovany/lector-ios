@@ -31,6 +31,7 @@ struct ProfileView: View {
               ProfileHeaderRowView(
                 name: profile.displayName,
                 email: profile.email,
+                avatarURL: profile.avatarURL,
                 badge: profileBadge
               )
             } else {

@@ -17,7 +17,7 @@ enum APIConfig {
     let value =
       (Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String)?.trimmingCharacters(
         in: .whitespacesAndNewlines)
-    let fallback = "https://lector-server.onrender.com/api/v1"
+    let fallback = "https://reader-go-383281059490.us-central1.run.app/api/v1"
     return normalizeHTTPURL(value?.isEmpty == false ? value! : fallback, fallback: fallback)
   }
 
@@ -33,6 +33,8 @@ enum APIConfig {
 enum KeychainKeys {
   /// Bearer token (Supabase `access_token`)
   static let authToken = "api.authToken"
+  /// Supabase `refresh_token` (used to keep sessions alive across access-token expiry).
+  static let refreshToken = "api.refreshToken"
   /// Authenticated Supabase user id (JWT `sub`)
   static let userID = "api.userID"
 }

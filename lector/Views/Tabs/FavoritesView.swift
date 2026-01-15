@@ -14,7 +14,10 @@ struct FavoritesView: View {
   @State private var viewModel: HomeViewModel
 
   init(viewModel: HomeViewModel? = nil) {
-    _viewModel = State(initialValue: viewModel ?? HomeViewModel())
+    let vm = viewModel ?? HomeViewModel()
+    // Favorites should load the full library (not recents) so favorite items always show up.
+    vm.filter = .all
+    _viewModel = State(initialValue: vm)
   }
 
   var body: some View {
@@ -72,7 +75,15 @@ struct FavoritesView: View {
         VStack(alignment: .leading, spacing: 14) {
           FavoritesHeaderView(filteredFavorites: filteredFavorites)
           FavoritesSearchBar(text: $query)
-          if filteredFavorites.isEmpty {
+          if filteredFavorites.isEmpty && viewModel.isLoading && query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            VStack(spacing: 14) {
+              ForEach(0..<3, id: \.self) { _ in
+                FavoritesSkeletonCard()
+                  .frame(height: 160)
+              }
+            }
+            .frame(minHeight: geometry.size.height - 300)
+          } else if filteredFavorites.isEmpty {
             inlineEmptyState
               .frame(minHeight: geometry.size.height - 300)
           } else {
@@ -91,6 +102,45 @@ struct FavoritesView: View {
         .padding(.bottom, 24)
       }
       .environment(viewModel)
+    }
+  }
+
+  private struct FavoritesSkeletonCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var phase: CGFloat = -0.8
+
+    var body: some View {
+      let base = RoundedRectangle(cornerRadius: 20, style: .continuous)
+      base
+        .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color(.secondarySystemBackground))
+        .overlay(
+          base
+            .stroke(colorScheme == .dark ? Color.white.opacity(0.08) : Color(.separator).opacity(0.18), lineWidth: 1)
+        )
+        .overlay(
+          GeometryReader { geo in
+            LinearGradient(
+              colors: [
+                Color.white.opacity(0.00),
+                Color.white.opacity(colorScheme == .dark ? 0.10 : 0.35),
+                Color.white.opacity(0.00),
+              ],
+              startPoint: .top,
+              endPoint: .bottom
+            )
+            .rotationEffect(.degrees(18))
+            .frame(width: geo.size.width * 0.7)
+            .offset(x: geo.size.width * phase)
+          }
+          .clipShape(base)
+          .allowsHitTesting(false)
+          .opacity(colorScheme == .dark ? 1 : 0.6)
+        )
+        .onAppear {
+          withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
+            phase = 1.2
+          }
+        }
     }
   }
 
@@ -161,12 +211,8 @@ private struct FavoritesSearchBar: View {
 
       TextField("Search favorites", text: $text)
         .font(.parkinsansMedium(size: 16))
-        .foregroundStyle(
-          colorScheme == .dark ? Color.white.opacity(0.22) : AppColors.matteBlack
-        )
-        .foregroundStyle(
-          colorScheme == .dark ? Color.white.opacity(0.22) : .secondary
-        )
+        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
+        .tint(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
         .textInputAutocapitalization(.never)
         .disableAutocorrection(true)
 

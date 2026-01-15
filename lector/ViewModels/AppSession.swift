@@ -23,6 +23,7 @@ final class AppSession {
     self.authService = authService ?? SupabaseAuthService()
     self.profileService = profileService ?? GoUserProfileService()
     refreshFromKeychain()
+    Task { await refreshSessionIfNeeded() }
     Task { await refreshProfileIfNeeded() }
   }
 
@@ -30,6 +31,43 @@ final class AppSession {
     let token = KeychainStore.getString(account: KeychainKeys.authToken) ?? ""
     let userID = KeychainStore.getString(account: KeychainKeys.userID) ?? ""
     isAuthenticated = !token.isEmpty && !userID.isEmpty
+  }
+
+  /// Keeps sessions alive across app restarts/device reboots by refreshing access tokens when needed.
+  func refreshSessionIfNeeded() async {
+    guard isAuthenticated else { return }
+    let token = KeychainStore.getString(account: KeychainKeys.authToken) ?? ""
+    let refresh = KeychainStore.getString(account: KeychainKeys.refreshToken) ?? ""
+    guard !token.isEmpty else { return }
+
+    // If we don't have a refresh token (older installs), the access token will expire and
+    // the backend will return "Invalid token". Ask the user to sign in once to enable persistence.
+    guard !refresh.isEmpty else {
+      if let exp = SupabaseAuthService.accessTokenExpiration(token), exp <= Date() {
+        alertMessage = "Session expired. Please sign in again."
+        signOut()
+      }
+      return
+    }
+
+    // Refresh if token is expired or close to expiring.
+    let exp = SupabaseAuthService.accessTokenExpiration(token)
+    let needsRefresh = (exp == nil) || (exp! <= Date().addingTimeInterval(5 * 60))
+    guard needsRefresh else { return }
+
+    do {
+      let newSession = try await authService.refreshSession(refreshToken: refresh)
+      KeychainStore.setString(newSession.accessToken, account: KeychainKeys.authToken)
+      if let newRefresh = newSession.refreshToken, !newRefresh.isEmpty {
+        KeychainStore.setString(newRefresh, account: KeychainKeys.refreshToken)
+      }
+      KeychainStore.setString(newSession.userID, account: KeychainKeys.userID)
+      isAuthenticated = true
+    } catch {
+      // If refresh token is invalid/revoked, user must sign in again.
+      alertMessage = "Session expired. Please sign in again."
+      signOut()
+    }
   }
 
   func refreshProfileIfNeeded() async {
@@ -110,6 +148,9 @@ final class AppSession {
       pkceVerifier = nil
 
       KeychainStore.setString(session.accessToken, account: KeychainKeys.authToken)
+      if let refresh = session.refreshToken, !refresh.isEmpty {
+        KeychainStore.setString(refresh, account: KeychainKeys.refreshToken)
+      }
       KeychainStore.setString(session.userID, account: KeychainKeys.userID)
       isAuthenticated = true
       await refreshProfileIfNeeded()
@@ -121,6 +162,7 @@ final class AppSession {
 
   func signOut() {
     KeychainStore.delete(account: KeychainKeys.authToken)
+    KeychainStore.delete(account: KeychainKeys.refreshToken)
     KeychainStore.delete(account: KeychainKeys.userID)
     isAuthenticated = false
     profile = nil

@@ -6,12 +6,29 @@ struct ReaderView: View {
 
   let book: Book
   var onProgressChange: ((Int, Int) -> Void)? = nil
+  /// Optional override used mainly for Xcode Previews to avoid network/DB dependencies.
+  let initialText: String?
 
   @StateObject private var viewModel = ReaderViewModel()
   @State private var showControls: Bool = false
+  @State private var showHighlightEditor: Bool = false
+  @State private var selectedHighlightText: String = ""
+  @State private var searchQuery: String = ""
+  @State private var showSearch: Bool = false
   private let topAnchorID: String = "readerTop"
   private let documentsService: DocumentsServicing = GoDocumentsService()
   @State private var didStartLoading: Bool = false
+  @State private var debugTextFrame: Bool = false
+
+  init(
+    book: Book,
+    onProgressChange: ((Int, Int) -> Void)? = nil,
+    initialText: String? = nil
+  ) {
+    self.book = book
+    self.onProgressChange = onProgressChange
+    self.initialText = initialText
+  }
 
   var body: some View {
     ZStack {
@@ -22,15 +39,18 @@ struct ReaderView: View {
         topBar
 
         GeometryReader { geo in
-          content
-            .onAppear {
+          content(containerWidth: geo.size.width)
+            .onChange(of: geo.size, initial: true) { _, newSize in
+              // Wait until we have a real layout size; otherwise pagination can produce "tiny pages".
               guard !didStartLoading else { return }
+              guard newSize.width > 240, newSize.height > 320 else { return }
               didStartLoading = true
 
               // Approximate the text container size based on our padding.
               let containerSize = CGSize(
                 width: max(10, geo.size.width - 36),
-                height: max(10, geo.size.height - 80)
+                // GeometryReader already accounts for top bar + bottom pager; avoid over-subtracting.
+                height: max(10, geo.size.height - 18)
               )
 
               let uiFont = preferences.font.uiFont(size: CGFloat(preferences.fontSize))
@@ -39,6 +59,15 @@ struct ReaderView: View {
                 lineSpacing: CGFloat(preferences.fontSize)
                   * CGFloat(max(0, preferences.lineSpacing - 1))
               )
+
+              if let initialText,
+                !initialText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              {
+                let paged = TextPaginator.paginate(
+                  text: initialText, containerSize: containerSize, style: style)
+                viewModel.setPages(paged, initialPage: book.currentPage)
+                return
+              }
 
               Task {
                 await viewModel.loadRemoteDocumentIfNeeded(
@@ -64,6 +93,23 @@ struct ReaderView: View {
       ReaderControlsSheetView()
         .environmentObject(preferences)
     }
+    .overlay {
+      if showHighlightEditor {
+        HighlightShareEditorView(
+          quote: selectedHighlightText,
+          bookTitle: book.title,
+          author: book.author,
+          onDismiss: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+              showHighlightEditor = false
+            }
+          }
+        )
+        .environmentObject(preferences)
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+      }
+    }
+    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showHighlightEditor)
   }
 
   private var topBar: some View {
@@ -82,6 +128,20 @@ struct ReaderView: View {
       Spacer(minLength: 0)
 
       HStack(spacing: 10) {
+        Button {
+          withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+            showSearch.toggle()
+            if !showSearch { searchQuery = "" }
+          }
+        } label: {
+          Image(systemName: "magnifyingglass")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(preferences.theme.surfaceText.opacity(0.85))
+            .padding(10)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Search")
+
         Button {
           showControls = true
         } label: {
@@ -118,34 +178,93 @@ struct ReaderView: View {
     .padding(.bottom, 10)
   }
 
-  private var content: some View {
+  private func content(containerWidth: CGFloat) -> some View {
     ScrollViewReader { proxy in
-      ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 0) {
-          Color.clear
-            .frame(height: 0)
-            .id(topAnchorID)
+      ZStack {
+        ScrollView(showsIndicators: false) {
+          VStack(alignment: .leading, spacing: 0) {
+            Color.clear
+              .frame(height: 0)
+              .id(topAnchorID)
 
-          header
-            .padding(.horizontal, 18)
-            .padding(.top, 18)
+            header
+              .padding(.horizontal, 18)
+              .padding(.top, 18)
 
-          Divider()
-            .opacity(0.12)
-            .padding(.horizontal, 18)
-            .padding(.top, 14)
+            Divider()
+              .opacity(0.12)
+              .padding(.horizontal, 18)
+              .padding(.top, 14)
 
-          Text(currentPageText)
-            .font(preferences.font.font(size: CGFloat(preferences.fontSize)))
-            .foregroundStyle(preferences.theme.surfaceText)
-            .lineSpacing(
-              CGFloat(preferences.fontSize) * CGFloat(max(0, preferences.lineSpacing - 1))
-            )
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 18)
-            .padding(.top, 18)
-            .padding(.bottom, 26)
+            if showSearch {
+              HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                  .foregroundStyle(preferences.theme.surfaceSecondaryText)
+                TextField("Search in book", text: $searchQuery)
+                  .textInputAutocapitalization(.never)
+                  .disableAutocorrection(true)
+                  .foregroundStyle(preferences.theme.surfaceText)
+                if !searchQuery.isEmpty {
+                  Button {
+                    searchQuery = ""
+                  } label: {
+                    Image(systemName: "xmark.circle.fill")
+                      .foregroundStyle(preferences.theme.surfaceSecondaryText)
+                  }
+                  .buttonStyle(.plain)
+                }
+              }
+              .padding(.horizontal, 14)
+              .padding(.vertical, 10)
+              .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                  .fill(
+                    preferences.theme.surfaceText.opacity(preferences.theme == .night ? 0.06 : 0.05)
+                  )
+              )
+              .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                  .stroke(preferences.theme.surfaceText.opacity(0.10), lineWidth: 1)
+              )
+              .padding(.horizontal, 18)
+              .padding(.top, 12)
+            }
+
+            if viewModel.isLoading {
+              VStack(spacing: 10) {
+                ProgressView()
+                  .tint(preferences.theme.accent)
+                  .scaleEffect(1.1)
+                Text("Loading your document")
+                  .font(.system(size: 16, weight: .semibold))
+                  .foregroundStyle(preferences.theme.surfaceText.opacity(0.92))
+                Text("This usually takes a few seconds.")
+                  .font(.system(size: 13, weight: .regular))
+                  .foregroundStyle(preferences.theme.surfaceSecondaryText)
+              }
+              .frame(maxWidth: .infinity)
+              .padding(.horizontal, 18)
+              .padding(.top, 44)
+              .padding(.bottom, 26)
+            } else {
+              SelectableTextView(
+                text: currentPageText,
+                font: preferences.font.uiFont(size: CGFloat(preferences.fontSize)),
+                textColor: UIColor(preferences.theme.surfaceText),
+                lineSpacing: CGFloat(preferences.fontSize)
+                  * CGFloat(max(0, preferences.lineSpacing - 1)),
+                highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
+                onShareSelection: { selected in
+                  selectedHighlightText = selected
+                  showHighlightEditor = true
+                }
+              )
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.horizontal, 18)
+              .padding(.top, 18)
+              .padding(.bottom, 26)
+            }
+          }
         }
       }
       .onChange(of: viewModel.currentIndex, initial: true) { _, newValue in
@@ -160,7 +279,7 @@ struct ReaderView: View {
 
   private var header: some View {
     VStack(alignment: .center, spacing: 10) {
-      Text("DOCUMENT")
+      Text(book.tags.first?.uppercased() ?? "DOCUMENT")
         .font(.system(size: 12, weight: .semibold))
         .foregroundStyle(preferences.theme.surfaceSecondaryText)
         .tracking(3.0)
@@ -182,8 +301,10 @@ struct ReaderView: View {
     .frame(maxWidth: .infinity)
   }
 
-  private func metaColumn(title: String, value: String) -> some View {
-    VStack(spacing: 6) {
+  private func metaColumn(title: String, value: String)
+    -> some View
+  {
+    VStack(alignment: .center, spacing: 6) {
       Text(title)
         .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(preferences.theme.surfaceSecondaryText)
@@ -191,6 +312,7 @@ struct ReaderView: View {
       Text(value)
         .font(.system(size: 14, weight: .semibold))
         .foregroundStyle(preferences.theme.surfaceText)
+        .multilineTextAlignment(.center)
     }
     .frame(maxWidth: .infinity)
   }
@@ -297,5 +419,61 @@ struct ReaderView: View {
   private var currentPageText: String {
     guard viewModel.pages.indices.contains(viewModel.currentIndex) else { return "" }
     return viewModel.pages[viewModel.currentIndex]
+  }
+}
+
+// MARK: - Preview
+
+@MainActor
+private func makeReaderPreviewPreferences() -> PreferencesViewModel {
+  let prefs = PreferencesViewModel()
+  prefs.theme = .night
+  prefs.font = .georgia
+  prefs.fontSize = 18
+  prefs.lineSpacing = 1.15
+  return prefs
+}
+
+#Preview("Reader • Test text") {
+  let sampleText =
+    """
+    Capítulo 1 — Texto de prueba
+
+    Este es un texto de prueba para previsualizar el lector. La idea es tener varios párrafos, con saltos de línea, para validar tipografía, espaciado y paginación.
+
+    Cuando el usuario cambia el tamaño de letra (AA) o el tema, el contenido debe seguir siendo cómodo de leer. También queremos verificar cómo se ve un título largo y cómo se comporta el paginador.
+
+    ——
+
+    Párrafo extra: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in urna sit amet massa viverra egestas. Sed at elit nec justo ullamcorper aliquet.
+
+    Fin.
+
+    \n\n——\n\n
+
+    Capítulo 2 — Otra página de prueba
+
+    Esta segunda sección existe para asegurar que el preview genere múltiples páginas y podamos probar navegación, search, y estilos en un bloque más largo.
+
+    Un texto más largo ayuda a detectar cortes raros, saltos de línea inesperados, y problemas de layout. También permite probar la búsqueda dentro del libro con varias coincidencias.
+
+    Repite: cthulhu cthulhu cthulhu.
+    """
+
+  let book = Book(
+    title: "Reader Preview 2",
+    author: "Fiodor Doestoyevski",
+    pagesTotal: 10,
+    currentPage: 4,
+    sizeBytes: 0,
+    lastOpenedDaysAgo: 0,
+    isRead: false,
+    isFavorite: false,
+    tags: ["ARTICLE"]  // Tag de ejemplo para el preview
+  )
+
+  NavigationStack {
+    ReaderView(book: book, initialText: sampleText)
+      .environmentObject(makeReaderPreviewPreferences())
   }
 }

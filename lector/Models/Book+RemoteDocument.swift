@@ -8,6 +8,7 @@ extension Book {
       doc.author ?? doc.metadata.originalAuthor ?? "Unknown"
 
     let totalPages = max(1, doc.metadata.pageCount ?? 1)
+    let startPage = max(0, doc.readingPosition?.pageNumber ?? 0)
     let daysAgo = max(
       0,
       Calendar.current.dateComponents([.day], from: doc.updatedAt, to: Date()).day ?? 0
@@ -19,10 +20,10 @@ extension Book {
       title: doc.title,
       author: authorText,
       pagesTotal: totalPages,
-      currentPage: 0,
+      currentPage: min(startPage, totalPages),
       sizeBytes: doc.metadata.fileSize ?? 0,
       lastOpenedDaysAgo: daysAgo,
-      isRead: false,
+      isRead: (startPage >= totalPages && totalPages > 0),
       isFavorite: doc.isFavorite,
       tags: doc.tag.map { [$0] } ?? []
     )
