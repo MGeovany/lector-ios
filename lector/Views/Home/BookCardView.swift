@@ -10,6 +10,7 @@ struct BookCardView: View {
   @State private var isShowingCreateTag: Bool = false
   @State private var newTagName: String = ""
   @State private var isShowingEditDetails: Bool = false
+  @State private var isShowingDeleteConfirm: Bool = false
 
   var body: some View {
     let documentKey = BookCardColorStore.documentKey(for: book)
@@ -125,6 +126,14 @@ struct BookCardView: View {
             } label: {
               Label("Tag", systemImage: "tag")
             }
+
+            Divider()
+
+            Button(role: .destructive) {
+              isShowingDeleteConfirm = true
+            } label: {
+              Label("Delete", systemImage: "trash")
+            }
           } label: {
             Image(systemName: "ellipsis")
               .font(.parkinsansSemibold(size: 18))
@@ -202,6 +211,16 @@ struct BookCardView: View {
           }
         }
       )
+    }
+    .alert("Delete this document?", isPresented: $isShowingDeleteConfirm) {
+      Button("Cancel", role: .cancel) {}
+      Button("Delete", role: .destructive) {
+        // Clear any per-document local UI state.
+        BookCardColorStore.delete(for: documentKey)
+        Task { await homeViewModel.deleteBook(bookID: book.id) }
+      }
+    } message: {
+      Text("This will permanently delete it from your library.")
     }
   }
 

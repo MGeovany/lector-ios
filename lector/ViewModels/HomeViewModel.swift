@@ -6,6 +6,7 @@ import Observation
 final class HomeViewModel {
   var filter: ReadingFilter = .recents
   var selectedBook: Book?
+  var searchQuery: String = ""
 
   private(set) var books: [Book] = []
   private(set) var availableTags: [String] = []
@@ -211,6 +212,11 @@ final class HomeViewModel {
     books[idx].isRead.toggle()
   }
 
+  func markAsRead(bookID: UUID) {
+    guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
+    books[idx].isRead = true
+  }
+
   func toggleFavorite(bookID: UUID) {
     guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
     guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else {
@@ -272,15 +278,46 @@ final class HomeViewModel {
     }
   }
 
+  func deleteBook(bookID: UUID) async {
+    guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
+    guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else {
+      alertMessage = "Missing document id."
+      return
+    }
+
+    do {
+      try await documentsService.deleteDocument(documentID: remoteID)
+      // Remove locally.
+      books.remove(at: idx)
+      if selectedBook?.id == bookID { selectedBook = nil }
+      // Notify other tabs/lists to refresh.
+      NotificationCenter.default.post(name: .documentsDidChange, object: nil)
+    } catch {
+      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to delete document."
+    }
+  }
+
   var filteredBooks: [Book] {
-    switch filter {
-    case .recents:
-      // Return books sorted by last opened (most recent first)
-      return books.sorted { $0.lastOpenedDaysAgo < $1.lastOpenedDaysAgo }
-    case .all:
-      return books
-    case .read:
-      return books.filter { $0.isRead }
+    let base: [Book] = {
+      switch filter {
+      case .recents:
+        // Return books sorted by last opened (most recent first)
+        return books.sorted { $0.lastOpenedDaysAgo < $1.lastOpenedDaysAgo }
+      case .all:
+        return books
+      case .read:
+        return books.filter { $0.isRead }
+      }
+    }()
+
+    let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !q.isEmpty else { return base }
+    let lowered = q.lowercased()
+    return base.filter { book in
+      if book.title.lowercased().contains(lowered) { return true }
+      if book.author.lowercased().contains(lowered) { return true }
+      if book.tags.contains(where: { $0.lowercased().contains(lowered) }) { return true }
+      return false
     }
   }
 }

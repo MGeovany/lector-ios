@@ -14,13 +14,15 @@ struct HomeView: View {
   }
 
   var body: some View {
+    @Bindable var viewModel = viewModel
     NavigationStack {
       ZStack {
         background.ignoresSafeArea()
 
         ScrollView(showsIndicators: false) {
           VStack(alignment: .leading, spacing: 16) {
-            HomeHeaderView(onAddTapped: { showFilePicker = true })
+            HomeHeaderView(
+              searchText: $viewModel.searchQuery, onAddTapped: { showFilePicker = true })
 
             // Filter buttons: Recents, All, Read
             // (Temporarily hidden per design review; keep logic intact.)
@@ -434,78 +436,4 @@ struct FilterTabsView: View {
         }
     }
   }
-}
-
-#Preview {
-  // Mock DocumentsService for preview that doesn't require authentication
-  struct MockDocumentsService: DocumentsServicing {
-    func getDocumentsByUserID(_ userID: String) async throws -> [RemoteDocument] {
-      // Return a mock document for preview using JSONDecoder
-      let jsonString = """
-        {
-          "id": "mock-doc-1",
-          "user_id": "\(userID)",
-          "title": "The Art of SwiftUI",
-          "author": "Jane Smith",
-          "description": "A comprehensive guide to building modern iOS apps",
-          "content": null,
-          "metadata": {
-            "original_title": "The Art of SwiftUI",
-            "original_author": "Jane Smith",
-            "language": "en",
-            "page_count": 245,
-            "word_count": 45000,
-            "file_size": 2500000,
-            "format": "pdf",
-            "source": "upload",
-            "has_password": false
-          },
-          "tag": "programming",
-          "is_favorite": false,
-          "created_at": "2024-01-15T10:00:00Z",
-          "updated_at": "2024-01-15T10:00:00Z"
-        }
-        """
-
-      let jsonData = jsonString.data(using: .utf8)!
-      let decoder = JSONDecoder()
-      decoder.dateDecodingStrategy = .iso8601
-      let mockDocument = try decoder.decode(RemoteDocument.self, from: jsonData)
-      return [mockDocument]
-    }
-
-    func getDocument(id: String) async throws -> RemoteDocumentDetail {
-      throw NSError(domain: "Preview", code: 0)
-    }
-
-    func updateDocument(documentID: String, title: String?, author: String?, tag: String?)
-      async throws
-      -> RemoteDocumentDetail
-    {
-      throw NSError(domain: "Preview", code: 0)
-    }
-
-    func uploadDocument(pdfData: Data, fileName: String) async throws -> RemoteDocument {
-      throw NSError(domain: "Preview", code: 0)
-    }
-
-    func setFavorite(documentID: String, isFavorite: Bool) async throws {
-      // No-op for preview
-    }
-
-    func getDocumentTags() async throws -> [String] {
-      ["programming", "fiction", "work"]
-    }
-
-    func createDocumentTag(name: String) async throws {}
-
-    func deleteDocumentTag(name: String) async throws {}
-  }
-
-  let mockService = MockDocumentsService()
-  let mockViewModel = HomeViewModel(documentsService: mockService, userID: "preview-user")
-
-  return HomeView(viewModel: mockViewModel)
-    .environmentObject(PreferencesViewModel())
-    .environment(AppSession())
 }

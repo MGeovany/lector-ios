@@ -89,4 +89,8 @@ enum BookCardColorStore {
   static func set(_ color: BookCardColor, for documentKey: String) {
     UserDefaults.standard.set(color.rawValue, forKey: key(for: documentKey))
   }
+
+  static func delete(for documentKey: String) {
+    UserDefaults.standard.removeObject(forKey: key(for: documentKey))
+  }
 }

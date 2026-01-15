@@ -2,8 +2,7 @@ import SwiftUI
 
 struct HomeHeaderView: View {
   @Environment(\.colorScheme) private var colorScheme
-  @Environment(AppSession.self) private var session
-  @State private var searchText: String = ""
+  @Binding var searchText: String
   var onAddTapped: (() -> Void)? = nil
 
   var body: some View {
@@ -82,6 +81,18 @@ struct HomeHeaderView: View {
             .tint(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
             .textInputAutocapitalization(.never)
             .disableAutocorrection(true)
+
+          if !searchText.isEmpty {
+            Button {
+              searchText = ""
+            } label: {
+              Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.35) : .secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Clear search")
+          }
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 18)
@@ -102,23 +113,5 @@ struct HomeHeaderView: View {
     .padding(.bottom, 2)
   }
 
-  private var firstName: String {
-    let fullName = session.profile?.displayName ?? "Geovany"
-    return fullName.split(separator: " ").first.map(String.init) ?? fullName
-  }
-
-  private var formattedDate: String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "EEEE, MMM d"
-    return formatter.string(from: Date())
-  }
-
-  private var greeting: String {
-    let hour = Calendar.current.component(.hour, from: Date())
-    switch hour {
-    case 5..<12: return "Good morning"
-    case 12..<18: return "Good afternoon"
-    default: return "Good evening"
-    }
-  }
+  // Note: we intentionally keep this header decoupled from session state for now.
 }

@@ -15,7 +15,6 @@ struct ProfileView: View {
   @State private var showLogoutConfirm: Bool = false
   @State private var showAccountDeletedAlert: Bool = false
   @State private var showLoggedOutAlert: Bool = false
-  @State private var showSubscriptionErrorAlert: Bool = false
 
   @AppStorage(AppPreferenceKeys.language) private var languageRawValue: String = AppLanguage.english
     .rawValue
@@ -66,27 +65,6 @@ struct ProfileView: View {
                 .foregroundStyle(.secondary)
             }
           }
-
-          Button {
-            Task {
-              await subscription.showManageSubscriptions()
-              if subscription.lastErrorMessage != nil {
-                showSubscriptionErrorAlert = true
-              }
-            }
-          } label: {
-            SettingsRowView(
-              icon: "creditcard",
-              title: "Manage subscription",
-              trailingText: subscription.isPremium ? "Cancel" : nil,
-              showsChevron: true
-            )
-          }
-          .buttonStyle(.plain)
-
-          Text("Cancel or change your plan in the App Store.")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
         }
 
         if subscription.isFounder {
@@ -205,11 +183,6 @@ struct ProfileView: View {
           .environmentObject(subscription)
       }
       .task { await subscription.refreshFromStoreKit() }
-      .alert("Subscription", isPresented: $showSubscriptionErrorAlert) {
-        Button("OK", role: .cancel) {}
-      } message: {
-        Text(subscription.lastErrorMessage ?? "Something went wrong.")
-      }
       .overlay {
         if showDeleteAccountConfirm {
           CenteredConfirmationModal(

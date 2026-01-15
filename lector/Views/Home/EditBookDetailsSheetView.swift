@@ -16,6 +16,7 @@ struct EditBookDetailsSheetView: View {
   @State private var author: String
   @State private var tag: String
   @State private var selectedColor: BookCardColor
+  @State private var didAutoSaveOnDisappear: Bool = false
 
   init(
     colorScheme: ColorScheme,
@@ -83,11 +84,25 @@ struct EditBookDetailsSheetView: View {
         ToolbarItem(placement: .topBarLeading) {
           Button("Back", action: onCancel)
         }
-        ToolbarItem(placement: .topBarTrailing) {
-          Button("Save") {
-            onSave(title, author, tag, selectedColor)
-          }
-        }
+      }
+      .onDisappear {
+        // Auto-save: details persist without requiring an explicit "Save" action.
+        // Also saves when the user dismisses via swipe.
+        guard !didAutoSaveOnDisappear else { return }
+        didAutoSaveOnDisappear = true
+
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedAuthor = author.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let didChange =
+          trimmedTitle != initialTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+          || trimmedAuthor != initialAuthor.trimmingCharacters(in: .whitespacesAndNewlines)
+          || trimmedTag != initialTag.trimmingCharacters(in: .whitespacesAndNewlines)
+          || selectedColor != initialColor
+
+        guard didChange else { return }
+        onSave(trimmedTitle, trimmedAuthor, trimmedTag, selectedColor)
       }
     }
   }

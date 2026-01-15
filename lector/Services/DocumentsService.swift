@@ -8,6 +8,7 @@ protocol DocumentsServicing {
   func getDocument(id: String) async throws -> RemoteDocumentDetail
   func updateDocument(documentID: String, title: String?, author: String?, tag: String?) async throws -> RemoteDocumentDetail
   func uploadDocument(pdfData: Data, fileName: String) async throws -> RemoteDocument
+  func deleteDocument(documentID: String) async throws
   func setFavorite(documentID: String, isFavorite: Bool) async throws
   func getDocumentTags() async throws -> [String]
   func createDocumentTag(name: String) async throws
@@ -61,6 +62,10 @@ final class GoDocumentsService: DocumentsServicing {
 
   func uploadDocument(pdfData: Data, fileName: String) async throws -> RemoteDocument {
     try await api.postMultipart("documents", fileData: pdfData, fileName: fileName)
+  }
+
+  func deleteDocument(documentID: String) async throws {
+    try await api.delete("documents/\(documentID)")
   }
 
   func setFavorite(documentID: String, isFavorite: Bool) async throws {

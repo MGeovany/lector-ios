@@ -80,7 +80,9 @@ struct FavoritesView: View {
         VStack(alignment: .leading, spacing: 14) {
           FavoritesHeaderView(filteredFavorites: filteredFavorites)
           FavoritesSearchBar(text: $query)
-          if filteredFavorites.isEmpty && viewModel.isLoading && query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+          if filteredFavorites.isEmpty && viewModel.isLoading
+            && query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+          {
             VStack(spacing: 14) {
               ForEach(0..<3, id: \.self) { _ in
                 FavoritesSkeletonCard()
@@ -120,7 +122,9 @@ struct FavoritesView: View {
         .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color(.secondarySystemBackground))
         .overlay(
           base
-            .stroke(colorScheme == .dark ? Color.white.opacity(0.08) : Color(.separator).opacity(0.18), lineWidth: 1)
+            .stroke(
+              colorScheme == .dark ? Color.white.opacity(0.08) : Color(.separator).opacity(0.18),
+              lineWidth: 1)
         )
         .overlay(
           GeometryReader { geo in
@@ -250,88 +254,4 @@ private struct FavoritesSearchBar: View {
     .onTapGesture { isFocused = true }
     .accessibilityLabel("Search favorites")
   }
-}
-
-#Preview {
-  // Mock DocumentsService for preview with a favorite book
-  struct MockDocumentsService: DocumentsServicing {
-    func getDocumentsByUserID(_ userID: String) async throws -> [RemoteDocument] {
-      // Return a mock favorite document for preview
-      let jsonString = """
-        {
-          "id": "mock-fav-doc-1",
-          "user_id": "\(userID)",
-          "title": "The Art of SwiftUI",
-          "author": "Jane Smith",
-          "description": "A comprehensive guide to building modern iOS apps",
-          "content": null,
-          "metadata": {
-            "original_title": "The Art of SwiftUI",
-            "original_author": "Jane Smith",
-            "language": "en",
-            "page_count": 245,
-            "word_count": 45000,
-            "file_size": 2500000,
-            "format": "pdf",
-            "source": "upload",
-            "has_password": false
-          },
-          "tag": "programming",
-          "is_favorite": true,
-          "created_at": "2024-01-15T10:00:00Z",
-          "updated_at": "2024-01-15T10:00:00Z"
-        }
-        """
-
-      let jsonData = jsonString.data(using: .utf8)!
-      let decoder = JSONDecoder()
-      decoder.dateDecodingStrategy = .iso8601
-      let mockDocument = try decoder.decode(RemoteDocument.self, from: jsonData)
-      return [mockDocument]
-    }
-
-    func getDocument(id: String) async throws -> RemoteDocumentDetail {
-      throw NSError(domain: "Preview", code: 0)
-    }
-
-    func updateDocument(documentID: String, title: String?, author: String?, tag: String?)
-      async throws
-      -> RemoteDocumentDetail
-    {
-      throw NSError(domain: "Preview", code: 0)
-    }
-
-    func uploadDocument(pdfData: Data, fileName: String) async throws -> RemoteDocument {
-      throw NSError(domain: "Preview", code: 0)
-    }
-
-    func setFavorite(documentID: String, isFavorite: Bool) async throws {
-      // No-op for preview
-    }
-
-    func getDocumentTags() async throws -> [String] {
-      ["programming", "fiction", "work"]
-    }
-
-    func createDocumentTag(name: String) async throws {}
-
-    func deleteDocumentTag(name: String) async throws {}
-
-    func getRecentDocumentsByUserID(_ userID: String, since: Date, limit: Int) async throws
-      -> [RemoteDocument]
-    {
-      return try await getDocumentsByUserID(userID)
-    }
-  }
-
-  let mockService = MockDocumentsService()
-  let mockViewModel = HomeViewModel(documentsService: mockService, userID: "preview-user")
-
-  return FavoritesView(viewModel: mockViewModel)
-    .environment(mockViewModel)
-    .environmentObject(PreferencesViewModel())
-    .environment(AppSession())
-    .task {
-      await mockViewModel.reload()
-    }
 }
