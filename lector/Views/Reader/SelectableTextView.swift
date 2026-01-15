@@ -7,8 +7,28 @@ struct SelectableTextView: UIViewRepresentable {
   let font: UIFont
   let textColor: UIColor
   let lineSpacing: CGFloat
+  // Search was removed for v1, but we keep these optional inputs for v2 without requiring call sites.
   let highlightQuery: String?
+  let activeMatchRange: NSRange?
   let onShareSelection: (String) -> Void
+
+  init(
+    text: String,
+    font: UIFont,
+    textColor: UIColor,
+    lineSpacing: CGFloat,
+    highlightQuery: String? = nil,
+    activeMatchRange: NSRange? = nil,
+    onShareSelection: @escaping (String) -> Void
+  ) {
+    self.text = text
+    self.font = font
+    self.textColor = textColor
+    self.lineSpacing = lineSpacing
+    self.highlightQuery = highlightQuery
+    self.activeMatchRange = activeMatchRange
+    self.onShareSelection = onShareSelection
+  }
 
   func sizeThatFits(
     _ proposal: ProposedViewSize,
@@ -88,23 +108,6 @@ struct SelectableTextView: UIViewRepresentable {
         .paragraphStyle: paragraph,
       ]
     )
-
-    if let highlightQuery,
-      !highlightQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    {
-      let query = highlightQuery.lowercased()
-      let full = text.lowercased() as NSString
-      var range = NSRange(location: 0, length: full.length)
-      while true {
-        let found = full.range(of: query, options: [], range: range)
-        if found.location == NSNotFound { break }
-        attr.addAttribute(
-          .backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.35), range: found)
-        let nextLoc = found.location + max(1, found.length)
-        if nextLoc >= full.length { break }
-        range = NSRange(location: nextLoc, length: full.length - nextLoc)
-      }
-    }
 
     // Update when either the string OR styling changes (theme/font/spacing).
     // Preserve selection when possible.

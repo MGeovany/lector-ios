@@ -13,8 +13,6 @@ struct ReaderView: View {
   @State private var showControls: Bool = false
   @State private var showHighlightEditor: Bool = false
   @State private var selectedHighlightText: String = ""
-  @State private var searchQuery: String = ""
-  @State private var showSearch: Bool = false
   private let topAnchorID: String = "readerTop"
   private let documentsService: DocumentsServicing = GoDocumentsService()
   @State private var didStartLoading: Bool = false
@@ -129,20 +127,6 @@ struct ReaderView: View {
 
       HStack(spacing: 10) {
         Button {
-          withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
-            showSearch.toggle()
-            if !showSearch { searchQuery = "" }
-          }
-        } label: {
-          Image(systemName: "magnifyingglass")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(preferences.theme.surfaceText.opacity(0.85))
-            .padding(10)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Search")
-
-        Button {
           showControls = true
         } label: {
           Text("AA")
@@ -196,40 +180,6 @@ struct ReaderView: View {
               .padding(.horizontal, 18)
               .padding(.top, 14)
 
-            if showSearch {
-              HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                  .foregroundStyle(preferences.theme.surfaceSecondaryText)
-                TextField("Search in book", text: $searchQuery)
-                  .textInputAutocapitalization(.never)
-                  .disableAutocorrection(true)
-                  .foregroundStyle(preferences.theme.surfaceText)
-                if !searchQuery.isEmpty {
-                  Button {
-                    searchQuery = ""
-                  } label: {
-                    Image(systemName: "xmark.circle.fill")
-                      .foregroundStyle(preferences.theme.surfaceSecondaryText)
-                  }
-                  .buttonStyle(.plain)
-                }
-              }
-              .padding(.horizontal, 14)
-              .padding(.vertical, 10)
-              .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                  .fill(
-                    preferences.theme.surfaceText.opacity(preferences.theme == .night ? 0.06 : 0.05)
-                  )
-              )
-              .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                  .stroke(preferences.theme.surfaceText.opacity(0.10), lineWidth: 1)
-              )
-              .padding(.horizontal, 18)
-              .padding(.top, 12)
-            }
-
             if viewModel.isLoading {
               VStack(spacing: 10) {
                 ProgressView()
@@ -253,7 +203,8 @@ struct ReaderView: View {
                 textColor: UIColor(preferences.theme.surfaceText),
                 lineSpacing: CGFloat(preferences.fontSize)
                   * CGFloat(max(0, preferences.lineSpacing - 1)),
-                highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
+                highlightQuery: nil,
+                activeMatchRange: nil,
                 onShareSelection: { selected in
                   selectedHighlightText = selected
                   showHighlightEditor = true
@@ -453,9 +404,9 @@ private func makeReaderPreviewPreferences() -> PreferencesViewModel {
 
     Capítulo 2 — Otra página de prueba
 
-    Esta segunda sección existe para asegurar que el preview genere múltiples páginas y podamos probar navegación, search, y estilos en un bloque más largo.
+    Esta segunda sección existe para asegurar que el preview genere múltiples páginas y podamos probar navegación y estilos en un bloque más largo.
 
-    Un texto más largo ayuda a detectar cortes raros, saltos de línea inesperados, y problemas de layout. También permite probar la búsqueda dentro del libro con varias coincidencias.
+    Un texto más largo ayuda a detectar cortes raros, saltos de línea inesperados, y problemas de layout.
 
     Repite: cthulhu cthulhu cthulhu.
     """
