@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import os
 
 struct ReaderView: View {
   @Environment(\.dismiss) private var dismiss
@@ -24,7 +23,6 @@ struct ReaderView: View {
   private let documentsService: DocumentsServicing = GoDocumentsService()
   private let readingPositionService: ReadingPositionServicing = GoReadingPositionService()
   @State private var didStartLoading: Bool = false
-  @State private var debugTextFrame: Bool = false
   private let shortDocContinuousScrollMaxPages: Int = 10
   private let scrollSpaceName: String = "readerScrollSpace"
   @State private var scrollOffsetY: CGFloat = 0
@@ -35,9 +33,6 @@ struct ReaderView: View {
   @State private var didRestoreContinuousScroll: Bool = false
   @State private var resolvedStartPage: Int? = nil
   @State private var resolvedStartProgress: Double? = nil
-  #if DEBUG
-    private let logger = Logger(subsystem: "lector", category: "ReaderView")
-  #endif
 
   init(
     book: Book,
@@ -97,15 +92,6 @@ struct ReaderView: View {
                     let page = max(1, pos.pageNumber ?? book.currentPage)
                     resolvedStartPage = page
                     resolvedStartProgress = pos.progress
-                    #if DEBUG
-                      logger.info(
-                        "Resolved reading position: page=\(page) progress=\(pos.progress ?? -1, format: .fixed(precision: 4)) docID=\(docID)"
-                      )
-                    #endif
-                  } else {
-                    #if DEBUG
-                      logger.warning("Failed to resolve reading position (nil pos). docID=\(docID)")
-                    #endif
                   }
                 }
 
@@ -117,11 +103,6 @@ struct ReaderView: View {
                 if let resolvedStartProgress {
                   startBook.readingProgress = resolvedStartProgress
                 }
-                #if DEBUG
-                  logger.info(
-                    "Loading doc with startPage=\(startBook.currentPage) startProgress=\(startBook.readingProgress ?? -1, format: .fixed(precision: 4)) shouldContinuous=\(self.shouldUseContinuousScroll)"
-                  )
-                #endif
                 await viewModel.loadRemoteDocumentIfNeeded(
                   book: startBook,
                   documentsService: documentsService,
@@ -164,16 +145,6 @@ struct ReaderView: View {
       }
     }
     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showHighlightEditor)
-    #if DEBUG
-      .overlay(alignment: .bottomLeading) {
-        if debugTextFrame {
-          debugOverlay
-          .padding(.leading, 12)
-          .padding(.bottom, shouldUseContinuousScroll ? 12 : 86)
-          .transition(.opacity)
-        }
-      }
-    #endif
   }
 
   private var topBar: some View {
@@ -192,23 +163,6 @@ struct ReaderView: View {
       Spacer(minLength: 0)
 
       HStack(spacing: 10) {
-        #if DEBUG
-          Button {
-            withAnimation(.easeInOut(duration: 0.15)) { debugTextFrame.toggle() }
-          } label: {
-            Text("DBG")
-              .font(.system(size: 12, weight: .bold, design: .monospaced))
-              .foregroundStyle(preferences.theme.surfaceText.opacity(0.75))
-              .padding(.horizontal, 10)
-              .padding(.vertical, 8)
-              .background(
-                Capsule(style: .continuous)
-                  .fill(preferences.theme.surfaceText.opacity(0.06))
-              )
-          }
-          .buttonStyle(.plain)
-          .accessibilityLabel("Toggle debug overlay")
-        #endif
         Button {
           withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
             showSearch.toggle()
@@ -279,21 +233,6 @@ struct ReaderView: View {
                   didRestore: $didRestoreContinuousScroll
                 )
               )
-
-            #if DEBUG
-              // Attach the probe INSIDE the ScrollView content so it can reliably find the underlying UIScrollView.
-              // (Using .background on the ScrollView itself can land outside the UIKit scroll hierarchy.)
-              Color.clear
-                .frame(height: 0)
-                .background(
-                  _ReaderUIScrollViewProbe { offsetY, contentH, viewportH in
-                    scrollOffsetY = max(0, offsetY)
-                    scrollContentHeight = max(1, contentH)
-                    scrollViewportHeight = max(1, viewportH)
-                    updateScrollProgress()
-                  }
-                )
-            #endif
 
             header
               .padding(.horizontal, 18)
@@ -451,11 +390,6 @@ struct ReaderView: View {
         // Allow offset-based restore to run whenever continuous mode becomes active.
         if isContinuous {
           didRestoreContinuousScroll = false
-          #if DEBUG
-            logger.info(
-              "Continuous mode enabled. restoreProgress=\(continuousRestoreProgress ?? -1, format: .fixed(precision: 4)) pages=\(self.viewModel.pages.count)"
-            )
-          #endif
         }
       }
     }
@@ -638,13 +572,6 @@ struct ReaderView: View {
       || scrollProgress >= 0.999
     {
       lastEmittedScrollProgress = scrollProgress
-      #if DEBUG
-        if debugTextFrame {
-          logger.debug(
-            "Emit progress: page=\(pageNumber)/\(total) scroll=\(scrollProgress, format: .fixed(precision: 4)) offset=\(Double(scrollOffsetY), format: .fixed(precision: 1)) contentH=\(Double(scrollContentHeight), format: .fixed(precision: 1)) viewportH=\(Double(scrollViewportHeight), format: .fixed(precision: 1))"
-          )
-        }
-      #endif
       onProgressChange?(pageNumber, total, scrollProgress)
     }
   }
@@ -680,126 +607,7 @@ private struct ReaderScrollViewportHeightKey: PreferenceKey {
   static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-#if DEBUG
-  // MARK: - Debug overlay
-  extension ReaderView {
-    private var debugOverlay: some View {
-      let maxOffset = max(1, scrollContentHeight - scrollViewportHeight)
-      let ratio = min(1.0, max(0.0, scrollOffsetY / maxOffset))
-      let info = [
-        "continuous=\(shouldUseContinuousScroll ? "true" : "false") loading=\(viewModel.isLoading ? "true" : "false") restored=\(didRestoreContinuousScroll ? "true" : "false")",
-        "offsetY=\(Int(scrollOffsetY)) maxOffset=\(Int(maxOffset)) ratio=\(String(format: "%.3f", Double(ratio)))",
-        "contentH=\(Int(scrollContentHeight)) viewportH=\(Int(scrollViewportHeight))",
-        "scrollProgress=\(String(format: "%.3f", scrollProgress)) lastEmit=\(String(format: "%.3f", lastEmittedScrollProgress))",
-        "book.page=\(book.currentPage) book.prog=\(String(format: "%.3f", book.readingProgress ?? -1))",
-        "resolved.page=\(resolvedStartPage ?? -1) resolved.prog=\(String(format: "%.3f", resolvedStartProgress ?? -1))",
-      ].joined(separator: "\n")
-
-      return VStack(alignment: .leading, spacing: 8) {
-        Text("Reader Debug")
-          .font(.system(size: 12, weight: .bold, design: .monospaced))
-          .foregroundStyle(.white.opacity(0.95))
-
-        Text(info)
-          .font(.system(size: 11, weight: .regular, design: .monospaced))
-          .foregroundStyle(.white.opacity(0.92))
-
-        // Small visual indicator: a track + thumb based on scrollProgress.
-        GeometryReader { geo in
-          let h = max(44, geo.size.height)
-          let thumbH: CGFloat = 14
-          let y = CGFloat(min(1.0, max(0.0, scrollProgress))) * max(0, h - thumbH)
-          ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-              .fill(Color.white.opacity(0.12))
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-              .fill(Color.orange.opacity(0.85))
-              .frame(height: thumbH)
-              .offset(y: y)
-          }
-        }
-        .frame(height: 80)
-      }
-      .padding(12)
-      .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-      .overlay(
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .stroke(Color.white.opacity(0.14), lineWidth: 1)
-      )
-      .allowsHitTesting(false)
-    }
-  }
-#endif
-
-#if DEBUG
-  // MARK: - UIScrollView probe (debug-only)
-  /// Introspects the underlying `UIScrollView` used by SwiftUI's `ScrollView` and reports
-  /// offset/size changes via KVO. Used when PreferenceKey-based tracking is unreliable.
-  private struct _ReaderUIScrollViewProbe: UIViewRepresentable {
-    typealias MetricsHandler = (
-      _ offsetY: CGFloat, _ contentHeight: CGFloat, _ viewportHeight: CGFloat
-    ) -> Void
-
-    let onChange: MetricsHandler
-
-    func makeUIView(context: Context) -> UIView {
-      let view = UIView(frame: .zero)
-      view.isUserInteractionEnabled = false
-      view.backgroundColor = .clear
-      return view
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {
-      // Defer to next runloop so the view is inserted into the hierarchy.
-      DispatchQueue.main.async {
-        guard let scrollView = uiView.lectorFindNearestScrollView() else { return }
-        context.coordinator.attachIfNeeded(scrollView: scrollView, onChange: onChange)
-      }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    final class Coordinator {
-      private weak var scrollView: UIScrollView?
-      private var offsetObs: NSKeyValueObservation?
-      private var contentSizeObs: NSKeyValueObservation?
-      private var boundsObs: NSKeyValueObservation?
-      private var onChange: MetricsHandler?
-
-      func attachIfNeeded(scrollView: UIScrollView, onChange: @escaping MetricsHandler) {
-        if self.scrollView === scrollView {
-          self.onChange = onChange
-          emit()
-          return
-        }
-
-        offsetObs = nil
-        contentSizeObs = nil
-        boundsObs = nil
-
-        self.scrollView = scrollView
-        self.onChange = onChange
-
-        offsetObs = scrollView.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
-          self?.emit()
-        }
-        contentSizeObs = scrollView.observe(\.contentSize, options: [.new]) { [weak self] _, _ in
-          self?.emit()
-        }
-        boundsObs = scrollView.observe(\.bounds, options: [.new]) { [weak self] _, _ in
-          self?.emit()
-        }
-
-        emit()
-      }
-
-      private func emit() {
-        guard let sv = scrollView, let onChange else { return }
-        onChange(sv.contentOffset.y, sv.contentSize.height, sv.bounds.height)
-      }
-    }
-  }
-#endif
+// (Debug overlay/probe removed)
 
 // MARK: - Continuous scroll restore (contentOffset-based)
 /// Sets the underlying ScrollView's contentOffset based on a 0..1 progress.
