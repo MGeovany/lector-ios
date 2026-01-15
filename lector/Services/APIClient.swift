@@ -16,6 +16,7 @@ enum APIError: LocalizedError, Equatable {
   case server(statusCode: Int, message: String)
   case decoding
   case network
+  case accountDisabled
 
   var errorDescription: String? {
     switch self {
@@ -30,6 +31,20 @@ enum APIError: LocalizedError, Equatable {
       return "Failed to decode server response."
     case .network:
       return "Network error."
+    case .accountDisabled:
+      return "Account disabled"
+    }
+  }
+
+  /// Returns true if this error represents an account disabled (403) response from backend.
+  var isAccountDisabled: Bool {
+    switch self {
+    case .accountDisabled:
+      return true
+    case .server(403, let message) where message.lowercased().contains("account disabled"):
+      return true
+    default:
+      return false
     }
   }
 }
@@ -186,6 +201,10 @@ final class APIClient {
           (try? JSONDecoder().decode(APIErrorEnvelope.self, from: data).error)
           ?? String(data: data, encoding: .utf8)
           ?? "Request failed."
+        // Convert 403 "Account disabled" to dedicated error case for easier handling.
+        if http.statusCode == 403, message.lowercased().contains("account disabled") {
+          throw APIError.accountDisabled
+        }
         throw APIError.server(statusCode: http.statusCode, message: message)
       }
 

@@ -63,6 +63,8 @@ final class AppSession {
       }
       KeychainStore.setString(newSession.userID, account: KeychainKeys.userID)
       isAuthenticated = true
+      // Sync account status with backend after successful refresh.
+      await syncAccountStatus()
     } catch {
       // If refresh token is invalid/revoked, user must sign in again.
       alertMessage = "Session expired. Please sign in again."
@@ -77,9 +79,36 @@ final class AppSession {
     }
     do {
       profile = try await profileService.getProfile()
+      // If profile fetch succeeds (200), account is not disabled; reset local flag.
+      UserDefaults.standard.set(false, forKey: AppPreferenceKeys.accountDisabled)
     } catch {
+      // Check if error is 403 "Account disabled" from middleware.
+      if let apiError = error as? APIError, apiError.isAccountDisabled {
+        // Account is disabled on backend; sync local flag.
+        UserDefaults.standard.set(true, forKey: AppPreferenceKeys.accountDisabled)
+      }
       // Don't block the app on profile fetch; fallback to Guest UI.
       profile = nil
+    }
+  }
+
+  /// Syncs account_disabled status with backend.
+  /// Called after successful login/refresh to ensure local AppStorage matches server state.
+  private func syncAccountStatus() async {
+    guard isAuthenticated else { return }
+    do {
+      // Try to fetch profile. If successful (200), account is enabled.
+      _ = try await profileService.getProfile()
+      // Backend responded 200; account is not disabled. Reset local flag.
+      UserDefaults.standard.set(false, forKey: AppPreferenceKeys.accountDisabled)
+    } catch {
+      // Check if error is 403 "Account disabled" from middleware.
+      if let apiError = error as? APIError, apiError.isAccountDisabled {
+        // Backend responded 403; account is disabled. Sync local flag.
+        UserDefaults.standard.set(true, forKey: AppPreferenceKeys.accountDisabled)
+      }
+      // For other errors (401, 500, etc.), don't change account status.
+      // User might have network issues or expired token; preserve current state.
     }
   }
 
@@ -154,6 +183,8 @@ final class AppSession {
       KeychainStore.setString(session.userID, account: KeychainKeys.userID)
       isAuthenticated = true
       await refreshProfileIfNeeded()
+      // Sync account status with backend after successful login.
+      await syncAccountStatus()
     } catch {
       pkceVerifier = nil
       alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to sign in."

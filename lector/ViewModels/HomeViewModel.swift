@@ -302,7 +302,7 @@ final class HomeViewModel {
       switch filter {
       case .recents:
         // Return books sorted by last opened (most recent first)
-        return books.sorted { $0.lastOpenedDaysAgo < $1.lastOpenedDaysAgo }
+        return books.sorted { $0.lastOpenedSortDate > $1.lastOpenedSortDate }
       case .all:
         return books
       case .read:

@@ -10,15 +10,20 @@ import SwiftUI
 struct ProfileView: View {
   @EnvironmentObject private var subscription: SubscriptionStore
   @Environment(AppSession.self) private var session
+  @Environment(\.openURL) private var openURL
   @State private var showPremiumSheet: Bool = false
   @State private var showDeleteAccountConfirm: Bool = false
   @State private var showLogoutConfirm: Bool = false
   @State private var showAccountDeletedAlert: Bool = false
   @State private var showLoggedOutAlert: Bool = false
+  @State private var usedBytes: Int64 = 0
+  @State private var isLoadingStorageUsage: Bool = false
+  private let documentsService: DocumentsServicing = GoDocumentsService()
 
   @AppStorage(AppPreferenceKeys.language) private var languageRawValue: String = AppLanguage.english
     .rawValue
   @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
+  @AppStorage(AppPreferenceKeys.accountDisabled) private var accountDisabled: Bool = false
 
   var body: some View {
 
@@ -84,7 +89,7 @@ struct ProfileView: View {
 
         Section("Storage") {
           StorageUsageCardView(
-            usedBytes: 0,
+            usedBytes: usedBytes,
             maxBytes: subscription.maxStorageBytes,
             isPremium: subscription.isPremium,
             onUpgradeTapped: subscription.isPremium ? nil : { showPremiumSheet = true }
@@ -183,17 +188,23 @@ struct ProfileView: View {
           .environmentObject(subscription)
       }
       .task { await subscription.refreshFromStoreKit() }
+      .task(id: session.isAuthenticated) {
+        await loadStorageUsage()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .documentsDidChange)) { _ in
+        Task { await loadStorageUsage() }
+      }
       .overlay {
         if showDeleteAccountConfirm {
           CenteredConfirmationModal(
             title: "Delete account?",
-            message: "This is a mock action for now. It will clear local app data on this device.",
-            confirmTitle: "Delete Account",
+            message:
+              "Your account will be temporarily disabled while we process your request. All data will be permanently deleted, and you’ll receive an email confirmation once completed.",
+            confirmTitle: "Request deletion",
             isDestructive: true,
             onConfirm: {
               showDeleteAccountConfirm = false
-              deleteAccountLocally()
-              showAccountDeletedAlert = true
+              requestAccountDeletion()
             },
             onCancel: { showDeleteAccountConfirm = false }
           )
@@ -240,6 +251,79 @@ struct ProfileView: View {
       ?? URL(string: "mailto:\(email)")
       ?? URL(string: "mailto:")
       ?? URL(fileURLWithPath: "/")
+  }
+
+  private func loadStorageUsage() async {
+    guard session.isAuthenticated else {
+      usedBytes = 0
+      return
+    }
+    let userID = KeychainStore.getString(account: KeychainKeys.userID) ?? ""
+    guard !userID.isEmpty else {
+      usedBytes = 0
+      return
+    }
+
+    isLoadingStorageUsage = true
+    defer { isLoadingStorageUsage = false }
+
+    do {
+      let docs = try await documentsService.getDocumentsByUserID(userID)
+      usedBytes = docs.reduce(Int64(0)) { $0 + ($1.metadata.fileSize ?? 0) }
+    } catch {
+      // Non-blocking; keep last known value.
+    }
+  }
+
+  private func requestAccountDeletion() {
+    Task {
+      do {
+        // First, call backend to mark account_disabled = true in DB (server-side blocking).
+        let profileService = GoUserProfileService()
+        try await profileService.requestAccountDeletion()
+
+        // Then disable access on this device (local blocking).
+        accountDisabled = true
+        subscription.downgradeToFree()
+
+        // Prepare an email request to support (user will send via Mail).
+        if let url = accountDeletionRequestEmailURL() {
+          openURL(url)
+        }
+
+        // Sign out to ensure no further access with cached tokens.
+        session.signOut()
+      } catch {
+        // If backend call fails, still block locally but show error.
+        accountDisabled = true
+        subscription.downgradeToFree()
+        session.signOut()
+        // TODO: Show error alert to user (backend call failed, but local blocking applied)
+      }
+    }
+  }
+
+  private func accountDeletionRequestEmailURL() -> URL? {
+    let email = "marlon.castro@thefndrs.com"
+    let userID = KeychainStore.getString(account: KeychainKeys.userID) ?? ""
+    let userEmail = session.profile?.email ?? ""
+    let subject = "Account Deletion Request"
+    let body =
+      """
+      Hi,
+
+      Please delete my Lector account and all associated data.
+
+      User ID: \(userID)
+      Email: \(userEmail)
+
+      Thanks,
+      """
+    let encodedSubject =
+      subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
+    let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? body
+    return URL(string: "mailto:\(email)?subject=\(encodedSubject)&body=\(encodedBody)")
+      ?? URL(string: "mailto:\(email)")
   }
 
   private func deleteAccountLocally() {

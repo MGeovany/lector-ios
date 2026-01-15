@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
   @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
+  @AppStorage(AppPreferenceKeys.accountDisabled) private var accountDisabled: Bool = false
   @State private var session = AppSession()
 
   private var selectedScheme: ColorScheme {
@@ -17,7 +18,9 @@ struct ContentView: View {
 
   var body: some View {
     ZStack {
-      if session.isAuthenticated {
+      if accountDisabled {
+        AccountDisabledView()
+      } else if session.isAuthenticated {
         MainTabView()
       } else {
         WelcomeView()

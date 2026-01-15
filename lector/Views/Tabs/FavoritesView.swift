@@ -203,7 +203,7 @@ struct FavoritesView: View {
     }()
 
     // Default sort: recently opened
-    return searched.sorted { $0.lastOpenedDaysAgo < $1.lastOpenedDaysAgo }
+    return searched.sorted { $0.lastOpenedSortDate > $1.lastOpenedSortDate }
   }
 }
 

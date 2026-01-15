@@ -42,7 +42,7 @@ struct BookCardView: View {
           HStack(spacing: 6) {
 
             Label(
-              "\(book.lastOpenedDaysAgo)d ago | ",
+              "\(book.lastOpenedDisplayText) | ",
               systemImage: "calendar"
             )
             .font(.parkinsansSemibold(size: 13))
