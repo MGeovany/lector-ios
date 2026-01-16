@@ -73,11 +73,11 @@ struct ReaderControlsSheetView: View {
     HStack(alignment: .center) {
       VStack(alignment: .leading, spacing: 8) {
         Text("Reading")
-          .font(.system(size: 18, weight: .bold))
+          .font(.parkinsansBold(size: CGFloat(18)))
           .foregroundStyle(preferences.theme.surfaceText)
           .padding(.top, 20)
         Text("Quick controls")
-          .font(.system(size: 12, weight: .semibold))
+          .font(.parkinsansSemibold(size: CGFloat(12)))
           .foregroundStyle(preferences.theme.surfaceSecondaryText)
       }
 
@@ -85,7 +85,7 @@ struct ReaderControlsSheetView: View {
 
       Button(action: dismiss.callAsFunction) {
         Image(systemName: "xmark")
-          .font(.system(size: 12, weight: .bold))
+          .font(.parkinsansBold(size: CGFloat(12)))
           .foregroundStyle(preferences.theme.surfaceText.opacity(0.85))
           .frame(width: 32, height: 32)
           .background(

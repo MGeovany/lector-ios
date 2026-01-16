@@ -9,7 +9,7 @@ struct ThemeOptionCardView: View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 10) {
         Image(systemName: option.icon)
-          .font(.system(size: 16, weight: .bold))
+          .font(.parkinsansBold(size: CGFloat(16)))
           .foregroundStyle(option.accent)
           .frame(width: 26, height: 26)
           .background(
@@ -18,11 +18,11 @@ struct ThemeOptionCardView: View {
 
         VStack(alignment: .leading, spacing: 2) {
           Text(option.title)
-            .font(.system(size: 14, weight: .bold))
+            .font(.parkinsansBold(size: CGFloat(14)))
             .foregroundStyle(
               colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
           Text(option.subtitle)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.parkinsansSemibold(size: CGFloat(12)))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
         }
         Spacer(minLength: 0)
@@ -34,10 +34,10 @@ struct ThemeOptionCardView: View {
 
         VStack(alignment: .leading, spacing: 4) {
           Text("Preview")
-            .font(.system(size: 11, weight: .bold))
+            .font(.parkinsans(size: CGFloat(11), weight: .bold))
             .foregroundStyle(option.surfaceSecondaryText)
           Text("Reading should feel calm.")
-            .font(.system(size: 13, weight: .semibold))
+            .font(.parkinsans(size: CGFloat(13), weight: .semibold))
             .foregroundStyle(option.surfaceText)
             .lineLimit(2)
         }

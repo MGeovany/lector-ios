@@ -42,33 +42,35 @@ final class AddViewModel {
 
   private func validateQuotaAndSize(nextFileBytes: Int64) async throws {
     let plan = currentPlanFromDefaults()
-    let maxBytes: Int64 = {
+    // Keep the single-file cap conservative to match backend validation.
+    let maxSingleFileBytes: Int64 = Int64(MAX_STORAGE_PREMIUM_MB) * 1024 * 1024
+
+    let maxTotalBytes: Int64 = {
       switch plan {
       case .free:
         return Int64(MAX_STORAGE_MB) * 1024 * 1024
       case .proMonthly, .proYearly, .founderLifetime:
-        // Keep a reasonable per-file cap (backend may enforce too).
-        return Int64(MAX_STORAGE_PREMIUM_MB) * 1024 * 1024
+        // Use decimal GB for UX consistency (50GB = 50,000,000,000 bytes).
+        return Int64(MAX_STORAGE_PRO_GB) * 1_000_000_000
       }
     }()
 
-    if nextFileBytes > maxBytes {
+    if nextFileBytes > maxSingleFileBytes {
       throw APIError.server(
         statusCode: 400,
-        message: "File too large. Maximum single file size is \(Int(maxBytes / 1024 / 1024))MB."
+        message:
+          "File too large. Maximum single file size is \(Int(maxSingleFileBytes / 1024 / 1024))MB."
       )
     }
-
-    // Pro/Founder: treat quota as unlimited in-app. Backend can still enforce.
-    if plan != .free { return }
 
     // Best-effort precheck to match web UX. Backend also enforces this.
     let docs = try await documentsService.getDocumentsByUserID(userID)
     let currentUsage = docs.reduce(Int64(0)) { $0 + ($1.metadata.fileSize ?? 0) }
-    if currentUsage + nextFileBytes > maxBytes {
+    if currentUsage + nextFileBytes > maxTotalBytes {
       throw APIError.server(
         statusCode: 400,
-        message: "Storage limit reached (\(MAX_STORAGE_MB)MB). Delete a document or upgrade."
+        message:
+          "Storage limit reached. Max is \(plan == .free ? "\(MAX_STORAGE_MB)MB" : "\(MAX_STORAGE_PRO_GB)GB"). Delete a document or contact support for more space."
       )
     }
   }

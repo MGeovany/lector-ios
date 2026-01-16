@@ -9,6 +9,10 @@ import Foundation
 
 // Storage limits (MB)
 public let MAX_STORAGE_MB: Int = 15
+
+// Total storage quota for paid tiers (Pro / Founder).
+// Note: backend enforcement must also match this value.
+public let MAX_STORAGE_PRO_GB: Int = 50
 public let MAX_STORAGE_PREMIUM_MB: Int = 250
 
 enum APIConfig {

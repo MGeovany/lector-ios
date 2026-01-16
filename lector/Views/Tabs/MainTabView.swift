@@ -131,6 +131,11 @@ struct TabBarIconView: View {
   let icon: TabBarIcon
   let isSelected: Bool
   @Environment(\.colorScheme) private var colorScheme
+  @EnvironmentObject private var subscription: SubscriptionStore
+  @SceneStorage("lector_tab_profile_ring_did_animate") private var didAnimateProfileRingOnce: Bool =
+    false
+  @State private var profileRingRotation: Double = 0
+  @State private var didTriggerAfterAvatarLoaded: Bool = false
 
   var body: some View {
     switch icon {
@@ -148,6 +153,23 @@ struct TabBarIconView: View {
         .foregroundStyle(foreground)
 
     case .profileAvatar(let url):
+      tabProfileAvatar(url: url, showProRing: subscription.isPro)
+    }
+  }
+
+  private var foreground: Color {
+    isSelected ? AppColors.tabSelected(for: colorScheme) : AppColors.tabUnselected(for: colorScheme)
+  }
+
+  private func tabProfileAvatar(url: URL?, showProRing: Bool) -> some View {
+    if !showProRing {
+      return AnyView(tabProfileAvatarPlain(url: url))
+    }
+    return AnyView(tabProfileAvatarWithProRing(url: url))
+  }
+
+  private func tabProfileAvatarPlain(url: URL?) -> some View {
+    Group {
       if let url {
         AsyncImage(url: url) { phase in
           switch phase {
@@ -155,32 +177,87 @@ struct TabBarIconView: View {
             image
               .resizable()
               .scaledToFill()
-              .frame(width: 24, height: 24)
           default:
             Image(systemName: "person.crop.circle")
               .resizable()
               .scaledToFit()
               .padding(3)
-              .frame(width: 24, height: 24)
           }
         }
-        .frame(width: 24, height: 24)
-        .background(Color.black.opacity(colorScheme == .dark ? 0.20 : 0.06))
-        .clipShape(Circle())
-        .overlay(
-          Circle()
-            .stroke(foreground.opacity(isSelected ? 0.30 : 0.18), lineWidth: 0)
-        )
       } else {
         Image(systemName: "person.crop.circle")
           .font(.parkinsans(size: 20))
           .foregroundStyle(foreground)
       }
     }
+    .frame(width: 24, height: 24)
+    .background(Color.black.opacity(colorScheme == .dark ? 0.20 : 0.06))
+    .clipShape(Circle())
   }
 
-  private var foreground: Color {
-    isSelected ? AppColors.tabSelected(for: colorScheme) : AppColors.tabUnselected(for: colorScheme)
+  private func tabProfileAvatarWithProRing(url: URL?) -> some View {
+    ZStack {
+      Group {
+        if let url {
+          AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+              image
+                .resizable()
+                .scaledToFill()
+                .onAppear {
+                  triggerProfileRingAnimationIfNeeded()
+                }
+            default:
+              Image(systemName: "person.crop.circle")
+                .resizable()
+                .scaledToFit()
+                .padding(3)
+            }
+          }
+        } else {
+          Image(systemName: "person.crop.circle")
+            .resizable()
+            .scaledToFit()
+            .padding(3)
+        }
+      }
+      .frame(width: 24, height: 24)
+      .background(Color.black.opacity(colorScheme == .dark ? 0.20 : 0.06))
+      .clipShape(Circle())
+
+      Circle()
+        .strokeBorder(
+          AngularGradient(
+            gradient: Gradient(colors: [
+              Color(red: 0.89, green: 0.80, blue: 1.00),  // ~#E2CBFF
+              Color(red: 0.22, green: 0.23, blue: 0.70),  // ~#393BB2
+              Color(red: 0.89, green: 0.80, blue: 1.00),
+            ]),
+            center: .center,
+            angle: .degrees(profileRingRotation)
+          ),
+          lineWidth: 2
+        )
+        .frame(width: 30, height: 30)
+        .opacity(isSelected ? 1.0 : 0.92)
+    }
+    .frame(width: 30, height: 30)
+  }
+
+  private func triggerProfileRingAnimationIfNeeded() {
+    // Only animate after avatar image is actually loaded (AsyncImage .success),
+    // and only once per app launch/session.
+    guard !didTriggerAfterAvatarLoaded else { return }
+    didTriggerAfterAvatarLoaded = true
+
+    guard !didAnimateProfileRingOnce else { return }
+    didAnimateProfileRingOnce = true
+
+    profileRingRotation = 0
+    withAnimation(.linear(duration: 1.25)) {
+      profileRingRotation = 360
+    }
   }
 }
 
@@ -189,4 +266,12 @@ struct TabBarIconView: View {
     .environment(AppSession())
     .environmentObject(PreferencesViewModel())
     .environmentObject(SubscriptionStore())
+}
+
+#Preview("Pro User") {
+  let proSubscription = SubscriptionStore(initialPlan: .founderLifetime, persistToDefaults: false)
+  MainTabView()
+    .environment(AppSession())
+    .environmentObject(PreferencesViewModel())
+    .environmentObject(proSubscription)
 }

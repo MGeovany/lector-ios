@@ -84,13 +84,14 @@ final class SubscriptionStore: ObservableObject {
   var isPro: Bool { plan.isPro }
   var isFounder: Bool { plan.isFounder }
 
-  /// Free is capped. Pro/Founder are "Unlimited" in-app UX. Backend may still enforce limits.
+  /// Free is capped. Pro/Founder have a higher cap. Backend must also enforce the same limits.
   var maxStorageBytes: Int64 {
     switch plan {
     case .free:
       return Int64(MAX_STORAGE_MB) * 1024 * 1024
     case .proMonthly, .proYearly, .founderLifetime:
-      return Int64.max / 4
+      // Use decimal GB for UX consistency (50GB = 50,000,000,000 bytes).
+      return Int64(MAX_STORAGE_PRO_GB) * 1_000_000_000
     }
   }
 
@@ -99,7 +100,7 @@ final class SubscriptionStore: ObservableObject {
     case .free:
       return ByteCountFormatter.string(fromByteCount: maxStorageBytes, countStyle: .file)
     case .proMonthly, .proYearly, .founderLifetime:
-      return "Unlimited"
+      return "\(MAX_STORAGE_PRO_GB) GB"
     }
   }
 
@@ -195,10 +196,37 @@ final class SubscriptionStore: ObservableObject {
     plan = entitlement.plan
     expirationDate = entitlement.expirationDate
     isAutoRenewable = entitlement.isAutoRenewable
+    Task { await syncPlanToBackendIfPossible() }
   }
 
   static let planKey = "lector_subscription_plan"
   static let legacyIsPremiumKey = "lector_isPremium"
+
+  @MainActor
+  private func syncPlanToBackendIfPossible() async {
+    let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+    guard !isPreview else { return }
+
+    struct Body: Encodable {
+      let subscription_plan: String
+    }
+
+    let api = APIClient()
+    do {
+      try await api.putJSON("preferences", body: Body(subscription_plan: backendPlanString))
+    } catch {
+      // Non-blocking: backend sync best-effort.
+    }
+  }
+
+  private var backendPlanString: String {
+    switch plan {
+    case .free: return "free"
+    case .proMonthly: return "pro_monthly"
+    case .proYearly: return "pro_yearly"
+    case .founderLifetime: return "founder_lifetime"
+    }
+  }
 }
 
 // MARK: - StoreKit 2

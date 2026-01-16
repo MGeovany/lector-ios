@@ -226,7 +226,7 @@ private struct UploadToastView: View {
         .foregroundStyle(toast.kind.iconColor)
 
       Text(toast.message)
-        .font(.system(size: 13, weight: .semibold))
+        .font(.parkinsans(size: CGFloat(13), weight: .semibold))
         .foregroundStyle(textColor)
         .lineLimit(2)
         .multilineTextAlignment(.leading)

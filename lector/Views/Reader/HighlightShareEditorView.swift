@@ -136,7 +136,7 @@ struct HighlightShareEditorView: View {
           VStack {
             Spacer()
             Text(toastMessage)
-              .font(.system(size: 15, weight: .medium))
+              .font(.parkinsans(size: CGFloat(15), weight: .medium))
               .foregroundStyle(.white)
               .padding(.horizontal, 20)
               .padding(.vertical, 12)
@@ -181,9 +181,9 @@ struct HighlightShareEditorView: View {
           ProgressView().tint(buttonForeground)
         } else {
           Image(systemName: "paperplane.fill")
-            .font(.system(size: 16, weight: .semibold))
+            .font(.parkinsansSemibold(size: CGFloat(16)))
           Text("Share")
-            .font(.system(size: 16, weight: .semibold))
+            .font(.parkinsansSemibold(size: CGFloat(16)))
         }
       }
       .foregroundStyle(buttonForeground)

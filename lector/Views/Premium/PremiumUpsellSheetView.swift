@@ -65,7 +65,7 @@ struct PremiumUpsellSheetView: View {
         .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
 
       Text(
-        "Upgrade for unlimited storage. Pro will include AI features in the next 1–2 months."
+        "Upgrade for \(MAX_STORAGE_PRO_GB)GB storage. Pro will include AI features in the next 1–2 months."
       )
       .font(.parkinsans(size: 14, weight: .regular))
       .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
@@ -102,9 +102,9 @@ struct PremiumUpsellSheetView: View {
       PlanCard(
         title: "Pro",
         priceText: proPriceText,
-        subtitle: "Unlimited storage, sync + backup, and AI soon.",
+        subtitle: "\(MAX_STORAGE_PRO_GB)GB storage, sync + backup, and AI soon.",
         bullets: [
-          "Unlimited storage",
+          "\(MAX_STORAGE_PRO_GB)GB total storage",
           "Sync + backup",
           "Private stats (soon)",
           "AI features in 1–2 months",

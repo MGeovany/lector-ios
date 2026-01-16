@@ -5,6 +5,7 @@ struct StorageUsageCardView: View {
   let maxBytes: Int64
   let isPremium: Bool
   let onUpgradeTapped: (() -> Void)?
+  let onMoreSpaceTapped: (() -> Void)?
   @Environment(\.colorScheme) private var colorScheme
 
   private var progress: Double {
@@ -28,7 +29,7 @@ struct StorageUsageCardView: View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 10) {
         Image(systemName: "externaldrive")
-          .font(.system(size: 14, weight: .semibold))
+          .font(.parkinsansSemibold(size: CGFloat(14)))
           .foregroundStyle(.secondary)
           .frame(width: 26, height: 26)
           .background(
@@ -38,11 +39,11 @@ struct StorageUsageCardView: View {
 
         VStack(alignment: .leading, spacing: 2) {
           Text("Storage")
-            .font(.system(size: 12, weight: .semibold))
+            .font(.parkinsansSemibold(size: CGFloat(12)))
             .foregroundStyle(.secondary)
 
           Text("\(usedText) / \(maxText)")
-            .font(.system(size: 13, weight: .semibold))
+            .font(.parkinsansSemibold(size: CGFloat(13)))
             .foregroundStyle(.primary)
             .lineLimit(1)
             .minimumScaleFactor(0.85)
@@ -51,34 +52,9 @@ struct StorageUsageCardView: View {
         Spacer(minLength: 0)
 
         if isPremium {
-          Text("PREMIUM")
-            .font(.system(size: 10, weight: .heavy))
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-              Capsule(style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-                .overlay(
-                  Capsule(style: .continuous)
-                    .stroke(Color(.separator).opacity(0.6), lineWidth: 1)
-                )
-            )
+
         } else if let onUpgradeTapped {
-          Button(action: onUpgradeTapped) {
-            HStack(spacing: 6) {
-              Image(systemName: "crown.fill")
-                .font(.system(size: 10, weight: .heavy))
-              Text("Go Premium")
-                .font(.system(size: 11, weight: .heavy))
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-          }
-          .buttonStyle(.borderless)
-          .background(
-            AppColors.primaryButtonFill(for: colorScheme), in: Capsule(style: .continuous))
+          GoPremiumRingButton(action: onUpgradeTapped)
         }
       }
 
@@ -87,15 +63,25 @@ struct StorageUsageCardView: View {
 
       HStack(spacing: 6) {
         Text("\(percentText) used")
-          .font(.system(size: 11, weight: .semibold))
+          .font(.parkinsansSemibold(size: CGFloat(11)))
           .foregroundStyle(.secondary)
 
         Spacer()
 
-        Text(isPremium ? "More space" : "Upgrade to extend storage")
-          .font(.system(size: 11, weight: .semibold))
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
+        if isPremium, let onMoreSpaceTapped {
+          Button(action: onMoreSpaceTapped) {
+            Text("More space")
+              .font(.parkinsansSemibold(size: CGFloat(11)))
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+          }
+          .buttonStyle(.plain)
+        } else {
+          Text(isPremium ? "More space" : "Upgrade to extend storage")
+            .font(.parkinsansSemibold(size: CGFloat(11)))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
       }
     }
     .padding(.horizontal, 12)
@@ -121,6 +107,55 @@ struct StorageUsageCardView: View {
   }
 }
 
+private struct GoPremiumRingButton: View {
+  let action: () -> Void
+  @Environment(\.colorScheme) private var colorScheme
+  @State private var ringRotation: Double = 0
+
+  private let ringGradient = Gradient(colors: [
+    Color(red: 0.89, green: 0.80, blue: 1.00),  // ~#E2CBFF
+    Color(red: 0.22, green: 0.23, blue: 0.70),  // ~#393BB2
+    Color(red: 0.89, green: 0.80, blue: 1.00),
+  ])
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 6) {
+        Image(systemName: "crown.fill")
+          .font(.parkinsans(size: CGFloat(11), weight: .heavy))
+        Text("Go Premium")
+          .font(.parkinsans(size: CGFloat(11), weight: .heavy))
+      }
+      .foregroundStyle(AppColors.matteBlack)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      // White inner pill; ring provides the only “effect”.
+      .background(Color.white, in: Capsule(style: .continuous))
+    }
+    // Avoid the default pressed/disabled-looking highlight.
+    .buttonStyle(GoPremiumRingButtonStyle())
+    .padding(2)
+    .background(
+      AngularGradient(gradient: ringGradient, center: .center, angle: .degrees(ringRotation)),
+      in: Capsule(style: .continuous)
+    )
+    .onAppear {
+      ringRotation = 0
+      withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
+        ringRotation = 360
+      }
+    }
+  }
+}
+
+private struct GoPremiumRingButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+      .animation(.spring(response: 0.22, dampingFraction: 0.85), value: configuration.isPressed)
+  }
+}
+
 #Preview {
   ZStack {
     Color(.systemGroupedBackground).ignoresSafeArea()
@@ -129,13 +164,15 @@ struct StorageUsageCardView: View {
         usedBytes: 7 * 1024 * 1024,
         maxBytes: 15 * 1024 * 1024,
         isPremium: false,
-        onUpgradeTapped: {}
+        onUpgradeTapped: {},
+        onMoreSpaceTapped: nil
       )
       StorageUsageCardView(
         usedBytes: 73 * 1024 * 1024,
         maxBytes: 250 * 1024 * 1024,
         isPremium: true,
-        onUpgradeTapped: nil
+        onUpgradeTapped: nil,
+        onMoreSpaceTapped: {}
       )
     }
     .padding()
