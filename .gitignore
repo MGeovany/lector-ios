@@ -1,3 +1,16 @@
 docs/
 buildServer.json
 lector.code-workspace
+
+# Swift Package Manager
+.build/
+.swiftpm/
+/Package.resolved
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad
+*.xcbkptlist
+DerivedData/
+.DS_Store

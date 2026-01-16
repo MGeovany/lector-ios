@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		961F8AE62F1941E900AA0ADA /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 96D0B6B9A1C2D3E4F5A6B7C8 /* Sentry */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		969C9A482F0C1A6E00EA0DB2 /* lector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lector.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F0A1B2C3D4E5F67890123456 /* FontRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontRegistrar.swift; path = lector/Utils/FontRegistrar.swift; sourceTree = SOURCE_ROOT; };
@@ -24,6 +28,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				961F8AE62F1941E900AA0ADA /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,6 +80,7 @@
 			);
 			name = lector;
 			packageProductDependencies = (
+				96D0B6B9A1C2D3E4F5A6B7C8 /* Sentry */,
 			);
 			productName = lector;
 			productReference = 969C9A482F0C1A6E00EA0DB2 /* lector.app */;
@@ -104,6 +110,9 @@
 			);
 			mainGroup = 969C9A3F2F0C1A6E00EA0DB2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				96D0B6B9A1C2D3E4F5A6B7C9 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 969C9A492F0C1A6E00EA0DB2 /* Products */;
 			projectDirPath = "";
@@ -268,6 +277,7 @@
 				DEVELOPMENT_TEAM = F5AC2P3U57;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_SENTRY_DSN = "$(SENTRY_DSN)";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save highlight images to your Photos library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -301,6 +311,7 @@
 				DEVELOPMENT_TEAM = F5AC2P3U57;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_SENTRY_DSN = "$(SENTRY_DSN)";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save highlight images to your Photos library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -346,6 +357,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		96D0B6B9A1C2D3E4F5A6B7C9 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.40.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		96D0B6B9A1C2D3E4F5A6B7C8 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96D0B6B9A1C2D3E4F5A6B7C9 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 969C9A402F0C1A6E00EA0DB2 /* Project object */;
 }

@@ -1,5 +1,8 @@
 import Foundation
 import Observation
+#if canImport(Sentry)
+import Sentry
+#endif
 
 @MainActor
 @Observable
@@ -31,6 +34,13 @@ final class AppSession {
     let token = KeychainStore.getString(account: KeychainKeys.authToken) ?? ""
     let userID = KeychainStore.getString(account: KeychainKeys.userID) ?? ""
     isAuthenticated = !token.isEmpty && !userID.isEmpty
+#if canImport(Sentry)
+    if isAuthenticated {
+      SentrySDK.setUser(User(userId: userID))
+    } else {
+      SentrySDK.setUser(nil as User?)
+    }
+#endif
   }
 
   /// Keeps sessions alive across app restarts/device reboots by refreshing access tokens when needed.
@@ -63,10 +73,22 @@ final class AppSession {
       }
       KeychainStore.setString(newSession.userID, account: KeychainKeys.userID)
       isAuthenticated = true
+#if canImport(Sentry)
+      SentrySDK.setUser(User(userId: newSession.userID))
+#endif
       // Sync account status with backend after successful refresh.
       await syncAccountStatus()
     } catch {
       // If refresh token is invalid/revoked, user must sign in again.
+#if canImport(Sentry)
+      let event = Event(error: error)
+      event.level = .error
+      event.extra = [
+        "has_refresh_token": String(!refresh.isEmpty)
+      ]
+      event.fingerprint = ["auth_refresh_failed", String(describing: type(of: error))]
+      SentrySDK.capture(event: event)
+#endif
       alertMessage = "Session expired. Please sign in again."
       signOut()
     }
@@ -86,6 +108,13 @@ final class AppSession {
       if let apiError = error as? APIError, apiError.isAccountDisabled {
         // Account is disabled on backend; sync local flag.
         UserDefaults.standard.set(true, forKey: AppPreferenceKeys.accountDisabled)
+      } else {
+#if canImport(Sentry)
+        let event = Event(error: error)
+        event.level = .error
+        event.fingerprint = ["profile_fetch_failed", String(describing: type(of: error))]
+        SentrySDK.capture(event: event)
+#endif
       }
       // Don't block the app on profile fetch; fallback to Guest UI.
       profile = nil
@@ -116,6 +145,15 @@ final class AppSession {
     let start = authService.beginGoogleOAuth()
     pkceVerifier = start.pkceVerifier
     lastOAuthURLString = start.url.absoluteString
+#if canImport(Sentry)
+    let crumb = Breadcrumb(level: .info, category: "auth")
+    crumb.message = "begin_google_sign_in"
+    crumb.data = [
+      "url_host": start.url.host ?? "",
+      "url_scheme": start.url.scheme ?? "",
+    ]
+    SentrySDK.addBreadcrumb(crumb)
+#endif
 
     // `ASWebAuthenticationSession` requires an http/https URL and supports custom-scheme callbacks.
     let scheme = start.url.scheme?.lowercased()
@@ -127,6 +165,12 @@ final class AppSession {
       && !urlString.contains(" ")
 
     guard isValidForWebAuth else {
+#if canImport(Sentry)
+      let crumb = Breadcrumb(level: .warning, category: "auth")
+      crumb.message = "invalid_oauth_url"
+      crumb.data = ["url": urlString]
+      SentrySDK.addBreadcrumb(crumb)
+#endif
       alertMessage =
         "Couldn't start sign-in. Invalid authorization URL.\n\nURL: \(urlString)\n\nCheck SUPABASE_URL configuration."
       isShowingOAuth = false
@@ -145,6 +189,12 @@ final class AppSession {
         await handleOAuthCallback(callbackURL)
       } catch {
         await MainActor.run {
+#if canImport(Sentry)
+          let event = Event(error: error)
+          event.level = .error
+          event.fingerprint = ["oauth_web_auth_failed", String(describing: type(of: error))]
+          SentrySDK.capture(event: event)
+#endif
           self.pkceVerifier = nil
           self.isAuthenticating = false
           self.alertMessage =
@@ -182,21 +232,42 @@ final class AppSession {
       }
       KeychainStore.setString(session.userID, account: KeychainKeys.userID)
       isAuthenticated = true
+#if canImport(Sentry)
+      SentrySDK.setUser(User(userId: session.userID))
+
+      let crumb = Breadcrumb(level: .info, category: "auth")
+      crumb.message = "oauth_completed"
+      SentrySDK.addBreadcrumb(crumb)
+#endif
       await refreshProfileIfNeeded()
       // Sync account status with backend after successful login.
       await syncAccountStatus()
     } catch {
       pkceVerifier = nil
+#if canImport(Sentry)
+      let event = Event(error: error)
+      event.level = .error
+      event.fingerprint = ["oauth_complete_failed", String(describing: type(of: error))]
+      SentrySDK.capture(event: event)
+#endif
       alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to sign in."
     }
   }
 
   func signOut() {
+#if canImport(Sentry)
+    let crumb = Breadcrumb(level: .info, category: "auth")
+    crumb.message = "sign_out"
+    SentrySDK.addBreadcrumb(crumb)
+#endif
     KeychainStore.delete(account: KeychainKeys.authToken)
     KeychainStore.delete(account: KeychainKeys.refreshToken)
     KeychainStore.delete(account: KeychainKeys.userID)
     isAuthenticated = false
     profile = nil
+#if canImport(Sentry)
+    SentrySDK.setUser(nil as User?)
+#endif
     NotificationCenter.default.post(name: .documentsDidChange, object: nil)
   }
 }
