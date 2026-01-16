@@ -1,6 +1,7 @@
 import Foundation
+
 #if canImport(Sentry)
-import Sentry
+  import Sentry
 #endif
 
 protocol AuthTokenProviding {
@@ -152,15 +153,15 @@ final class APIClient {
 
   private func makeRequest(url: URL, method: String) throws -> URLRequest {
     guard let token = tokenProvider.bearerToken(), !token.isEmpty else {
-#if canImport(Sentry)
-      let crumb = Breadcrumb(level: .warning, category: "api")
-      crumb.message = "missing_auth_token"
-      crumb.data = [
-        "method": method,
-        "url": url.absoluteString,
-      ]
-      SentrySDK.addBreadcrumb(crumb)
-#endif
+      #if canImport(Sentry)
+        let crumb = Breadcrumb(level: .warning, category: "api")
+        crumb.message = "missing_auth_token"
+        crumb.data = [
+          "method": method,
+          "url": url.absoluteString,
+        ]
+        SentrySDK.addBreadcrumb(crumb)
+      #endif
       throw APIError.missingAuthToken
     }
 
@@ -200,17 +201,17 @@ final class APIClient {
       }
 
       if !(200...299).contains(http.statusCode) {
-#if canImport(Sentry)
-        let crumb = Breadcrumb(level: http.statusCode >= 500 ? .error : .warning, category: "api")
-        crumb.message = "http_error"
-        crumb.data = [
-          "status": http.statusCode,
-          "method": request.httpMethod ?? "",
-          "url": request.url?.absoluteString ?? "",
-          "did_retry_after_refresh": didRetryAfterRefresh,
-        ]
-        SentrySDK.addBreadcrumb(crumb)
-#endif
+        #if canImport(Sentry)
+          let crumb = Breadcrumb(level: http.statusCode >= 500 ? .error : .warning, category: "api")
+          crumb.message = "http_error"
+          crumb.data = [
+            "status": http.statusCode,
+            "method": request.httpMethod ?? "",
+            "url": request.url?.absoluteString ?? "",
+            "did_retry_after_refresh": didRetryAfterRefresh,
+          ]
+          SentrySDK.addBreadcrumb(crumb)
+        #endif
 
         // Attempt a single refresh+retry on auth failures.
         if http.statusCode == 401, !didRetryAfterRefresh {
@@ -232,24 +233,24 @@ final class APIClient {
 
         let err = APIError.server(statusCode: http.statusCode, message: message)
         if http.statusCode >= 500 {
-#if canImport(Sentry)
-          let event = Event(error: err)
-          event.level = .error
-          event.extra = [
-            "status": String(http.statusCode),
-            "method": request.httpMethod ?? "",
-            "url": request.url?.absoluteString ?? "",
-            "did_retry_after_refresh": String(didRetryAfterRefresh),
-          ]
-          // Group by endpoint+status (helps spot repetition) without exploding cardinality.
-          event.fingerprint = [
-            "api_server_error",
-            String(http.statusCode),
-            request.httpMethod ?? "",
-            request.url?.path ?? "",
-          ]
-          SentrySDK.capture(event: event)
-#endif
+          #if canImport(Sentry)
+            let event = Event(error: err)
+            event.level = .error
+            event.extra = [
+              "status": String(http.statusCode),
+              "method": request.httpMethod ?? "",
+              "url": request.url?.absoluteString ?? "",
+              "did_retry_after_refresh": String(didRetryAfterRefresh),
+            ]
+            // Group by endpoint+status (helps spot repetition) without exploding cardinality.
+            event.fingerprint = [
+              "api_server_error",
+              String(http.statusCode),
+              request.httpMethod ?? "",
+              request.url?.path ?? "",
+            ]
+            SentrySDK.capture(event: event)
+          #endif
         }
         throw err
       }
@@ -257,31 +258,35 @@ final class APIClient {
       do {
         return try APIClient.jsonDecoder.decode(T.self, from: data)
       } catch {
-#if canImport(Sentry)
-        let event = Event(error: APIError.decoding)
-        event.level = .error
-        event.extra = [
-          "method": request.httpMethod ?? "",
-          "url": request.url?.absoluteString ?? "",
-        ]
-        event.fingerprint = ["api_decoding_failed", request.httpMethod ?? "", request.url?.path ?? ""]
-        SentrySDK.capture(event: event)
-#endif
+        #if canImport(Sentry)
+          let event = Event(error: APIError.decoding)
+          event.level = .error
+          event.extra = [
+            "method": request.httpMethod ?? "",
+            "url": request.url?.absoluteString ?? "",
+          ]
+          event.fingerprint = [
+            "api_decoding_failed", request.httpMethod ?? "", request.url?.path ?? "",
+          ]
+          SentrySDK.capture(event: event)
+        #endif
         throw APIError.decoding
       }
     } catch let apiError as APIError {
       throw apiError
     } catch {
-#if canImport(Sentry)
-      let event = Event(error: error)
-      event.level = .error
-      event.extra = [
-        "method": request.httpMethod ?? "",
-        "url": request.url?.absoluteString ?? "",
-      ]
-      event.fingerprint = ["api_network_error", request.httpMethod ?? "", request.url?.path ?? ""]
-      SentrySDK.capture(event: event)
-#endif
+      #if canImport(Sentry)
+        let event = Event(error: error)
+        event.level = .error
+        event.extra = [
+          "method": request.httpMethod ?? "",
+          "url": request.url?.absoluteString ?? "",
+        ]
+        event.fingerprint = [
+          "api_network_error", request.httpMethod ?? "", request.url?.path ?? "",
+        ]
+        SentrySDK.capture(event: event)
+      #endif
       throw APIError.network
     }
   }
