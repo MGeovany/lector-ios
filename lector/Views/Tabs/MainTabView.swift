@@ -12,6 +12,9 @@ struct MainTabView: View {
   @State private var isTabBarHidden: Bool = false
   @Environment(\.colorScheme) private var colorScheme
   @Environment(AppSession.self) private var session
+  // Observe avatar selection changes so the tab bar icon updates immediately.
+  @AppStorage(AppPreferenceKeys.profileAvatarHeadAssetName) private var headAssetName: String = ""
+  @AppStorage(AppPreferenceKeys.profileAvatarFaceAssetName) private var faceAssetName: String = ""
 
   var body: some View {
     TabView(selection: $selectedTab) {
@@ -74,7 +77,7 @@ struct MainTabView: View {
         title: "Profile",
         icon: .profileAvatar(
           url: session.profile?.avatarURL,
-          selection: ProfileAvatarStore.currentSelection()
+          selection: currentAvatarSelection
         ),
         isSelected: selectedTab == .profile,
         action: { selectedTab = .profile }
@@ -94,6 +97,21 @@ struct MainTabView: View {
         .frame(height: 1),
       alignment: .top
     )
+  }
+
+  /// Computed avatar selection from observed @AppStorage values.
+  /// Falls back to ProfileAvatarStore.currentSelection() for migration/legacy support.
+  private var currentAvatarSelection: ProfileAvatarSelection? {
+    let head = headAssetName.trimmingCharacters(in: .whitespacesAndNewlines)
+    let face = faceAssetName.trimmingCharacters(in: .whitespacesAndNewlines)
+    let direct = ProfileAvatarSelection(
+      headAssetName: head,
+      faceAssetName: face,
+      accessoryAssetName: ""
+    )
+    // If we have any selection from @AppStorage, use it; otherwise fall back to store
+    // (handles migration/legacy cases).
+    return direct.hasAny ? direct : ProfileAvatarStore.currentSelection()
   }
 }
 
