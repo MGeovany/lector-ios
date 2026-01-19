@@ -301,7 +301,7 @@ struct TabBarIconView: View {
 }
 
 #Preview("Pro User") {
-  let proSubscription = SubscriptionStore(initialPlan: .founderLifetime, persistToDefaults: false)
+  let proSubscription = SubscriptionStore(initialPlan: .free, persistToDefaults: false)
   MainTabView()
     .environment(AppSession())
     .environmentObject(PreferencesViewModel())

@@ -18,6 +18,12 @@ struct TermsAndConditionsView: View {
         )
         .foregroundStyle(.secondary)
 
+        sectionTitle("Subscriptions")
+        Text(
+          "Subscription plans, including one-time purchases, are subject to our terms of service. For complete details on subscription terms and potential changes, please refer to our Privacy Policy and Terms & Conditions available on our website."
+        )
+        .foregroundStyle(.secondary)
+
         sectionTitle("Support")
         Text(
           "Support is provided on a best‑effort basis. We may contact you using the email you provide when you reach out."

@@ -60,12 +60,14 @@ struct PremiumUpsellSheetView: View {
 
   private var header: some View {
     VStack(alignment: .leading, spacing: 10) {
-      Text("Pick your plan")
+      Text(subscription.isPremium ? "Change your plan" : "Pick your plan")
         .font(.parkinsansBold(size: 34))
         .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
 
       Text(
-        "Upgrade for \(MAX_STORAGE_PRO_GB)GB storage. Pro will include AI features in the next 1–2 months."
+        subscription.isPremium
+          ? "Switch between plans or manage your subscription. Pro includes \(MAX_STORAGE_PRO_GB)GB storage and AI features coming soon."
+          : "Upgrade for \(MAX_STORAGE_PRO_GB)GB storage. Pro will include AI features in the next 1–2 months."
       )
       .font(.parkinsans(size: 14, weight: .regular))
       .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
@@ -125,7 +127,7 @@ struct PremiumUpsellSheetView: View {
           "Early access",
           "“Lector Founder” badge",
         ],
-        badgeText: "Lifetime",
+        badgeText: "One-time",
         isSelected: selectedPlan.isFounder,
         onTap: { selectedPlan = .founderLifetime }
       )
@@ -147,7 +149,7 @@ struct PremiumUpsellSheetView: View {
             .tint(.white)
             .transition(.scale.combined(with: .opacity))
         } else {
-          Text(selectedPlan == .free ? "Continue" : "Continue")
+          Text(buttonText)
             .font(.parkinsansBold(size: 16))
             .transition(.scale.combined(with: .opacity))
         }
@@ -161,10 +163,23 @@ struct PremiumUpsellSheetView: View {
       )
     }
     .buttonStyle(.plain)
-    .disabled(subscription.isPurchasing)
+    .disabled(subscription.isPurchasing || selectedPlan == subscription.plan)
     .scaleEffect(subscription.isPurchasing ? 0.98 : 1.0)
     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: subscription.isPurchasing)
     .padding(.top, 6)
+  }
+
+  private var buttonText: String {
+    if selectedPlan == subscription.plan {
+      return "Current plan"
+    }
+    if selectedPlan == .free {
+      return "Downgrade to Free"
+    }
+    if subscription.isPremium && selectedPlan.isPro {
+      return "Change plan"
+    }
+    return "Continue"
   }
 
   private var footer: some View {
@@ -207,7 +222,7 @@ struct PremiumUpsellSheetView: View {
   }
 
   private var founderPriceText: String {
-    subscription.priceText(for: .founderLifetime) ?? "$70 lifetime"
+    subscription.priceText(for: .founderLifetime) ?? "$99 one‑time"
   }
 }
 
