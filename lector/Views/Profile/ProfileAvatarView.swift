@@ -71,8 +71,12 @@ struct ProfileAvatarView: View {
         .renderingMode(kind == .head ? .original : .template)
         .resizable()
         // Faces are template images; in Dark Mode `.primary` is white, which makes
-        // facial expressions look "inverted". Force them to black for consistency.
-        .foregroundStyle(kind == .face ? Color.black : Color.primary)
+        // facial expressions look "inverted". Use a theme-aware dark color for consistency.
+        .foregroundStyle(
+          kind == .face
+            ? Color(white: colorScheme == .dark ? 0.15 : 0.0)
+            : Color.primary
+        )
         .scaledToFit()
         .frame(width: frame.width, height: frame.height)
         .scaleEffect(partTransform(for: trimmed, kind: kind).scale)
