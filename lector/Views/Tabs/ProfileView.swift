@@ -93,6 +93,20 @@ struct ProfileView: View {
                 .foregroundStyle(.secondary)
             }
           }
+
+          Button {
+            showPremiumSheet = true
+          } label: {
+            HStack {
+              Text(subscription.isPremium ? "Change subscription" : "Upgrade")
+                .font(.parkinsans(size: 15, weight: .medium))
+                .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
+              Spacer()
+              Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+            }
+          }
         }
 
         if subscription.isFounder {
@@ -489,7 +503,7 @@ private struct FounderHighlightCard: View {
         Text("Founder")
           .font(.parkinsansBold(size: 18))
           .foregroundStyle(.white.opacity(0.96))
-        Text("Lifetime perks for early supporters.")
+        Text("One-time perks for early supporters.")
           .font(.parkinsans(size: 12, weight: .regular))
           .foregroundStyle(.white.opacity(0.72))
       }
