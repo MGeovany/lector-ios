@@ -17,8 +17,11 @@ struct ReaderView: View {
   @State private var showControls: Bool = false
   @State private var showHighlightEditor: Bool = false
   @State private var selectedHighlightText: String = ""
+  @State private var selectedHighlightPageNumber: Int? = nil
+  @State private var selectedHighlightProgress: Double? = nil
   @State private var searchQuery: String = ""
   @State private var showSearch: Bool = false
+  @State private var isDismissing: Bool = false
   private let topAnchorID: String = "readerTop"
   private let documentsService: DocumentsServicing = GoDocumentsService()
   private let readingPositionService: ReadingPositionServicing = GoReadingPositionService()
@@ -28,11 +31,23 @@ struct ReaderView: View {
   @State private var scrollOffsetY: CGFloat = 0
   @State private var scrollContentHeight: CGFloat = 1
   @State private var scrollViewportHeight: CGFloat = 1
+  @State private var scrollInsetTop: CGFloat = 0
+  @State private var scrollInsetBottom: CGFloat = 0
   @State private var scrollProgress: Double = 0
   @State private var lastEmittedScrollProgress: Double = -1
   @State private var didRestoreContinuousScroll: Bool = false
+  @State private var didAttachKVOScrollMetrics: Bool = false
   @State private var resolvedStartPage: Int? = nil
   @State private var resolvedStartProgress: Double? = nil
+  private let horizontalPadding: CGFloat = 28
+  #if DEBUG
+  private let debugScrollLogs: Bool = true
+  #else
+  private let debugScrollLogs: Bool = false
+  #endif
+  @State private var lastLoggedOffsetY: CGFloat = -9999
+  @State private var lastLoggedContentHeight: CGFloat = -9999
+  @State private var lastLoggedViewportHeight: CGFloat = -9999
 
   init(
     book: Book,
@@ -62,7 +77,7 @@ struct ReaderView: View {
 
               // Approximate the text container size based on our padding.
               let containerSize = CGSize(
-                width: max(10, geo.size.width - 36),
+                width: max(10, geo.size.width - (horizontalPadding * 2)),
                 // GeometryReader already accounts for top bar + bottom pager; avoid over-subtracting.
                 height: max(10, geo.size.height - 18)
               )
@@ -123,7 +138,9 @@ struct ReaderView: View {
     .toolbar(.hidden, for: .tabBar)
     .toolbar(.hidden, for: .navigationBar)
     .navigationBarBackButtonHidden(true)
-    .preference(key: TabBarHiddenPreferenceKey.self, value: true)
+    // While popping this view, proactively allow the tab bar to re-appear so it doesn't "pop in"
+    // after the navigation transition finishes.
+    .preference(key: TabBarHiddenPreferenceKey.self, value: !isDismissing)
     .sheet(isPresented: $showControls) {
       ReaderControlsSheetView()
         .environmentObject(preferences)
@@ -134,6 +151,9 @@ struct ReaderView: View {
           quote: selectedHighlightText,
           bookTitle: book.title,
           author: book.author,
+          documentID: book.remoteID,
+          pageNumber: selectedHighlightPageNumber,
+          progress: selectedHighlightProgress,
           onDismiss: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
               showHighlightEditor = false
@@ -150,7 +170,13 @@ struct ReaderView: View {
   private var topBar: some View {
     HStack(spacing: 10) {
       Button {
-        dismiss()
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+          isDismissing = true
+        }
+        // Let the preference update propagate before the destination is removed.
+        DispatchQueue.main.async {
+          dismiss()
+        }
       } label: {
         Image(systemName: "chevron.left")
           .font(.system(size: 15, weight: .semibold))
@@ -222,7 +248,7 @@ struct ReaderView: View {
         .accessibilityLabel("Cycle theme")
       }
     }
-    .padding(.horizontal, 18)
+    .padding(.horizontal, horizontalPadding)
     .padding(.top, 12)
     .padding(.bottom, 10)
   }
@@ -247,14 +273,31 @@ struct ReaderView: View {
                   didRestore: $didRestoreContinuousScroll
                 )
               )
+            
+            // Diagnostics probe for scroll issues (contentOffset/contentSize).
+            // Helps identify whether scrolling is blocked by gestures or by layout (contentSize <= bounds).
+            Color.clear
+              .frame(height: 0)
+              .background(
+                _ReaderScrollMetricsBridge(
+                  enabled: shouldUseContinuousScroll && !viewModel.isLoading,
+                  debugLogs: debugScrollLogs,
+                  didAttach: $didAttachKVOScrollMetrics,
+                  offsetY: $scrollOffsetY,
+                  contentHeight: $scrollContentHeight,
+                  viewportHeight: $scrollViewportHeight,
+                  insetTop: $scrollInsetTop,
+                  insetBottom: $scrollInsetBottom
+                )
+              )
 
             header
-              .padding(.horizontal, 18)
+              .padding(.horizontal, horizontalPadding)
               .padding(.top, 18)
 
             Divider()
               .opacity(0.12)
-              .padding(.horizontal, 18)
+              .padding(.horizontal, horizontalPadding)
               .padding(.top, 14)
 
             if showSearch {
@@ -296,7 +339,7 @@ struct ReaderView: View {
                     lineWidth: !searchQuery.isEmpty ? 1.5 : 1
                   )
               )
-              .padding(.horizontal, 18)
+              .padding(.horizontal, horizontalPadding)
               .padding(.top, 12)
               .transition(.move(edge: .top).combined(with: .opacity))
               .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchQuery.isEmpty)
@@ -315,7 +358,7 @@ struct ReaderView: View {
                   .foregroundStyle(preferences.theme.surfaceSecondaryText)
               }
               .frame(maxWidth: .infinity)
-              .padding(.horizontal, 18)
+              .padding(.horizontal, horizontalPadding)
               .padding(.top, 44)
               .padding(.bottom, 26)
             } else {
@@ -331,6 +374,8 @@ struct ReaderView: View {
                       highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
                       onShareSelection: { selected in
                         selectedHighlightText = selected
+                        selectedHighlightPageNumber = idx + 1
+                        selectedHighlightProgress = scrollProgress
                         showHighlightEditor = true
                       }
                     )
@@ -338,7 +383,7 @@ struct ReaderView: View {
                   }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 18)
+                .padding(.horizontal, horizontalPadding)
                 .padding(.top, 18)
                 .padding(.bottom, 26)
               } else {
@@ -351,11 +396,13 @@ struct ReaderView: View {
                   highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
                   onShareSelection: { selected in
                     selectedHighlightText = selected
+                    selectedHighlightPageNumber = viewModel.currentIndex + 1
+                    selectedHighlightProgress = nil
                     showHighlightEditor = true
                   }
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 18)
+                .padding(.horizontal, horizontalPadding)
                 .padding(.top, 18)
                 .padding(.bottom, 26)
               }
@@ -382,15 +429,44 @@ struct ReaderView: View {
           }
         )
         .onPreferenceChange(ReaderScrollOffsetKey.self) { minY in
+          // When the KVO bridge is active, ignore this fallback path (it can be stale on some layouts).
+          if shouldUseContinuousScroll && didAttachKVOScrollMetrics { return }
           scrollOffsetY = max(0, -minY)
+          if debugScrollLogs && shouldUseContinuousScroll {
+            let next = scrollOffsetY
+            if abs(next - lastLoggedOffsetY) >= 8 {
+              lastLoggedOffsetY = next
+              print(
+                "[ReaderScroll] offsetY=\(Int(next)) progress=\(String(format: "%.3f", scrollProgress))"
+              )
+            }
+          }
           updateScrollProgress()
         }
         .onPreferenceChange(ReaderScrollContentHeightKey.self) { newValue in
+          if shouldUseContinuousScroll && didAttachKVOScrollMetrics { return }
           scrollContentHeight = max(1, newValue)
+          if debugScrollLogs && shouldUseContinuousScroll {
+            if abs(scrollContentHeight - lastLoggedContentHeight) >= 16 {
+              lastLoggedContentHeight = scrollContentHeight
+              print("[ReaderScroll] contentHeight=\(Int(scrollContentHeight))")
+            }
+          }
           updateScrollProgress()
         }
         .onPreferenceChange(ReaderScrollViewportHeightKey.self) { newValue in
+          if shouldUseContinuousScroll && didAttachKVOScrollMetrics { return }
           scrollViewportHeight = max(1, newValue)
+          if debugScrollLogs && shouldUseContinuousScroll {
+            if abs(scrollViewportHeight - lastLoggedViewportHeight) >= 16 {
+              lastLoggedViewportHeight = scrollViewportHeight
+              print("[ReaderScroll] viewportHeight=\(Int(scrollViewportHeight))")
+            }
+          }
+          updateScrollProgress()
+        }
+        .onChange(of: scrollOffsetY) { _, _ in
+          // KVO-driven updates won't necessarily trigger PreferenceKeys.
           updateScrollProgress()
         }
         .overlay(alignment: .trailing) {
@@ -510,7 +586,8 @@ struct ReaderView: View {
           .stroke(preferences.theme.surfaceText.opacity(0.10), lineWidth: 1)
       )
       .accessibilityLabel(
-        "Page \(max(1, viewModel.currentIndex + 1)) of \(max(1, viewModel.pages.count))")
+        "Page \(max(1, viewModel.currentIndex + 1)) of \(max(1, viewModel.pages.count))"
+      )
       .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.currentIndex)
 
       Spacer(minLength: 0)
@@ -585,10 +662,19 @@ struct ReaderView: View {
 
   private func updateScrollProgress() {
     guard shouldUseContinuousScroll else { return }
-    let maxOffset = max(1, scrollContentHeight - scrollViewportHeight)
+    // Mirror UIKit scroll math (includes insets) so the indicator matches the real scroll.
+    let maxOffset = max(
+      1,
+      scrollContentHeight - scrollViewportHeight + scrollInsetTop + scrollInsetBottom
+    )
     let next = min(1.0, max(0.0, Double(scrollOffsetY / maxOffset)))
     if abs(next - scrollProgress) > 0.0005 {
       scrollProgress = next
+      if debugScrollLogs, scrollContentHeight <= scrollViewportHeight + 1 {
+        print(
+          "[ReaderScroll] NOTE content not scrollable? contentHeight=\(Int(scrollContentHeight)) viewportHeight=\(Int(scrollViewportHeight))"
+        )
+      }
       emitContinuousScrollProgressIfNeeded()
     }
   }
@@ -681,6 +767,141 @@ private struct _ReaderScrollOffsetRestorer: UIViewRepresentable {
         scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: y), animated: false)
       }
       didRestore = true
+      #if DEBUG
+      print(
+        "[ReaderScroll] restore didRestore=\(didRestore) p=\(String(format: "%.3f", p)) contentSize=\(scrollView.contentSize) bounds=\(scrollView.bounds.size) offset=\(scrollView.contentOffset)"
+      )
+      #endif
+    }
+  }
+}
+
+// MARK: - Scroll metrics bridge (KVO-based)
+/// Reads the underlying SwiftUI ScrollView's `contentOffset`/`contentSize`/`bounds` and feeds
+/// them back into SwiftUI state. This is more reliable than PreferenceKeys for some short-doc layouts.
+private struct _ReaderScrollMetricsBridge: UIViewRepresentable {
+  let enabled: Bool
+  let debugLogs: Bool
+  @Binding var didAttach: Bool
+  @Binding var offsetY: CGFloat
+  @Binding var contentHeight: CGFloat
+  @Binding var viewportHeight: CGFloat
+  @Binding var insetTop: CGFloat
+  @Binding var insetBottom: CGFloat
+
+  func makeCoordinator() -> Coordinator { Coordinator() }
+
+  func makeUIView(context: Context) -> UIView {
+    let view = UIView(frame: .zero)
+    view.isUserInteractionEnabled = false
+    view.backgroundColor = .clear
+    return view
+  }
+
+  func updateUIView(_ uiView: UIView, context: Context) {
+    guard enabled else {
+      context.coordinator.stop()
+      if didAttach { didAttach = false }
+      return
+    }
+    context.coordinator.startIfNeeded(
+      from: uiView,
+      debugLogs: debugLogs,
+      onUpdate: { snap in
+        // Convert UIKit offset (-topInset at top) into a "top=0" progress offset.
+        let logicalOffsetY = max(0, snap.contentOffsetY + snap.insetTop)
+        DispatchQueue.main.async {
+          offsetY = logicalOffsetY
+          contentHeight = max(1, snap.contentHeight)
+          viewportHeight = max(1, snap.viewportHeight)
+          insetTop = snap.insetTop
+          insetBottom = snap.insetBottom
+          if !didAttach { didAttach = true }
+        }
+      }
+    )
+  }
+
+  final class Coordinator {
+    private var offsetObs: NSKeyValueObservation?
+    private var sizeObs: NSKeyValueObservation?
+    private var boundsObs: NSKeyValueObservation?
+    private weak var scrollView: UIScrollView?
+    private var lastOffsetY: CGFloat = -9999
+    private var lastLogTime: CFTimeInterval = 0
+    private var debugLogs: Bool = false
+    private var onUpdate: ((Snapshot) -> Void)?
+
+    struct Snapshot {
+      let contentOffsetY: CGFloat
+      let contentHeight: CGFloat
+      let viewportHeight: CGFloat
+      let insetTop: CGFloat
+      let insetBottom: CGFloat
+    }
+
+    func startIfNeeded(from view: UIView, debugLogs: Bool, onUpdate: @escaping (Snapshot) -> Void) {
+      if scrollView != nil { return }
+      self.debugLogs = debugLogs
+      self.onUpdate = onUpdate
+      guard let sv = view.lectorFindNearestScrollView() else {
+        if debugLogs { print("[ReaderScroll] metrics: could not find UIScrollView") }
+        return
+      }
+      scrollView = sv
+      if debugLogs {
+        print(
+          "[ReaderScroll] metrics attached contentSize=\(sv.contentSize) bounds=\(sv.bounds.size) inset=\(sv.adjustedContentInset) offset=\(sv.contentOffset)"
+        )
+      }
+      emitSnapshot(from: sv, forceLog: true)
+
+      offsetObs = sv.observe(\.contentOffset, options: [.new]) { [weak self] sv, _ in
+        guard let self else { return }
+        self.emitSnapshot(from: sv, forceLog: false)
+      }
+
+      sizeObs = sv.observe(\.contentSize, options: [.new]) { sv, _ in
+        self.emitSnapshot(from: sv, forceLog: true)
+      }
+
+      boundsObs = sv.observe(\.bounds, options: [.new]) { sv, _ in
+        self.emitSnapshot(from: sv, forceLog: true)
+      }
+    }
+
+    private func emitSnapshot(from sv: UIScrollView, forceLog: Bool) {
+      let inset = sv.adjustedContentInset
+      let snap = Snapshot(
+        contentOffsetY: sv.contentOffset.y,
+        contentHeight: sv.contentSize.height,
+        viewportHeight: sv.bounds.height,
+        insetTop: inset.top,
+        insetBottom: inset.bottom
+      )
+      onUpdate?(snap)
+
+      guard debugLogs else { return }
+      let y = sv.contentOffset.y
+      let now = CACurrentMediaTime()
+      if forceLog || abs(y - lastOffsetY) >= 12 || now - lastLogTime >= 0.25 {
+        lastOffsetY = y
+        lastLogTime = now
+        print(
+          "[ReaderScroll] KVO offsetY=\(Int(y)) contentSizeH=\(Int(sv.contentSize.height)) boundsH=\(Int(sv.bounds.height)) insetTop=\(Int(inset.top)) insetBottom=\(Int(inset.bottom))"
+        )
+      }
+    }
+
+    func stop() {
+      offsetObs?.invalidate()
+      sizeObs?.invalidate()
+      boundsObs?.invalidate()
+      offsetObs = nil
+      sizeObs = nil
+      boundsObs = nil
+      scrollView = nil
+      onUpdate = nil
     }
   }
 }

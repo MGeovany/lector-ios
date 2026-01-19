@@ -40,4 +40,8 @@ struct AppPreferenceKeys {
   static let theme = "lector_theme"
   static let language = "lector_language"
   static let accountDisabled = "lector_account_disabled"
+  static let profileAvatarAssetName = "lector_profile_avatar_asset_name"
+  static let profileAvatarHeadAssetName = "lector_profile_avatar_head_asset_name"
+  static let profileAvatarFaceAssetName = "lector_profile_avatar_face_asset_name"
+  static let profileAvatarAccessoryAssetName = "lector_profile_avatar_accessory_asset_name"
 }

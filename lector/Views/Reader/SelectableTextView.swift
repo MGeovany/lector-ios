@@ -10,6 +10,12 @@ struct SelectableTextView: UIViewRepresentable {
   let highlightQuery: String?
   let onShareSelection: (String) -> Void
 
+  #if DEBUG
+  private static let debugScrollLogs: Bool = true
+  #else
+  private static let debugScrollLogs: Bool = false
+  #endif
+
   func sizeThatFits(
     _ proposal: ProposedViewSize,
     uiView: ShareableSelectionTextView,
@@ -48,6 +54,12 @@ struct SelectableTextView: UIViewRepresentable {
     let usedRect = uiView.layoutManager.usedRect(for: uiView.textContainer)
     let height = ceil(usedRect.height)
 
+    if Self.debugScrollLogs {
+      print(
+        "[SelectableTextView] sizeThatFits width=\(proposedWidth) usedHeight=\(height) textLen=\(text.count) uiBounds=\(uiView.bounds.size)"
+      )
+    }
+
     return CGSize(width: proposedWidth, height: max(height, 1))
   }
 
@@ -57,6 +69,9 @@ struct SelectableTextView: UIViewRepresentable {
     v.isEditable = false
     v.isSelectable = true
     v.isScrollEnabled = false
+    // UITextView is a UIScrollView subclass. When embedded inside a parent SwiftUI ScrollView,
+    // its pan recognizer can compete with the parent's scroll gesture and effectively "pin"
+    // scrolling on short documents. We'll bias gesture recognition to the parent ScrollView.
     v.backgroundColor = .clear
     v.textContainerInset = .zero
     v.textContainer.lineFragmentPadding = 0
@@ -75,6 +90,8 @@ struct SelectableTextView: UIViewRepresentable {
 
   func updateUIView(_ uiView: ShareableSelectionTextView, context: Context) {
     uiView.onShareSelection = onShareSelection
+    // Prefer the parent SwiftUI ScrollView for vertical pans.
+    uiView.lectorPreferParentScrollViewForPans(debug: Self.debugScrollLogs)
 
     let paragraph = NSMutableParagraphStyle()
     paragraph.lineSpacing = lineSpacing
@@ -132,6 +149,45 @@ struct SelectableTextView: UIViewRepresentable {
     uiView.invalidateIntrinsicContentSize()
     uiView.setNeedsLayout()
     uiView.layoutIfNeeded()
+
+    if Self.debugScrollLogs {
+      print(
+        "[SelectableTextView] update bounds=\(uiView.bounds.size) attrLen=\(uiView.attributedText.length) scrollEnabled=\(uiView.isScrollEnabled)"
+      )
+    }
+  }
+}
+
+// MARK: - Gesture coordination helpers
+extension UIView {
+  fileprivate func lectorNearestAncestorScrollView(excludingSelf: Bool = true) -> UIScrollView? {
+    var v: UIView? = excludingSelf ? self.superview : self
+    while let current = v {
+      if let sv = current as? UIScrollView { return sv }
+      v = current.superview
+    }
+    return nil
+  }
+}
+
+extension UITextView {
+  fileprivate func lectorPreferParentScrollViewForPans(debug: Bool) {
+    // Find the nearest ancestor scroll view (the SwiftUI ScrollView host).
+    guard let parent = self.lectorNearestAncestorScrollView(excludingSelf: true) else {
+      if debug { print("[SelectableTextView] no parent UIScrollView ancestor found") }
+      return
+    }
+
+    // Make our internal pan wait for the parent scroll view's pan. This preserves text selection
+    // (long-press/tap) while ensuring vertical drags scroll the document.
+    panGestureRecognizer.require(toFail: parent.panGestureRecognizer)
+    panGestureRecognizer.cancelsTouchesInView = false
+
+    if debug {
+      print(
+        "[SelectableTextView] gesture priority: textPan requires parentPan. parentContentSize=\(parent.contentSize) parentBounds=\(parent.bounds.size)"
+      )
+    }
   }
 }
 

@@ -38,7 +38,11 @@ struct HighlightShareEditorView: View {
   let quote: String
   let bookTitle: String
   let author: String
+  let documentID: String?
+  let pageNumber: Int?
+  let progress: Double?
   let onDismiss: () -> Void
+  private let highlightsService: HighlightsServicing
 
   @State private var draft: HighlightShareDraft
   @State private var isSaving: Bool = false
@@ -47,39 +51,23 @@ struct HighlightShareEditorView: View {
   @State private var shareImage: UIImage?
   @State private var showShareSheet: Bool = false
 
-  private var buttonForeground: Color {
-    // Night theme uses a light accent; keep text/icons readable.
-    (preferences.theme == .night) ? .black : .white
-  }
-
-  private var buttonGradient: LinearGradient {
-    let accent = preferences.theme.accent
-    switch preferences.theme {
-    case .night:
-      return LinearGradient(
-        colors: [accent.opacity(0.98), accent.opacity(0.78)],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-      )
-    case .day:
-      return LinearGradient(
-        colors: [accent.opacity(0.95), accent.opacity(0.75)],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-      )
-    case .amber:
-      return LinearGradient(
-        colors: [accent.opacity(0.95), accent.opacity(0.70)],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-      )
-    }
-  }
-
-  init(quote: String, bookTitle: String, author: String, onDismiss: @escaping () -> Void = {}) {
+  init(
+    quote: String,
+    bookTitle: String,
+    author: String,
+    documentID: String? = nil,
+    pageNumber: Int? = nil,
+    progress: Double? = nil,
+    highlightsService: HighlightsServicing = GoHighlightsService(),
+    onDismiss: @escaping () -> Void = {}
+  ) {
     self.quote = quote
     self.bookTitle = bookTitle
     self.author = author
+    self.documentID = documentID
+    self.pageNumber = pageNumber
+    self.progress = progress
+    self.highlightsService = highlightsService
     self.onDismiss = onDismiss
     _draft = State(
       initialValue: HighlightShareDraft(
@@ -178,39 +166,20 @@ struct HighlightShareEditorView: View {
     } label: {
       HStack(spacing: 8) {
         if isSaving {
-          ProgressView().tint(buttonForeground)
+          ProgressView().tint(AppColors.primaryActionForeground)
         } else {
-          Image(systemName: "paperplane.fill")
-            .font(.parkinsansSemibold(size: CGFloat(16)))
-          Text("Share")
-            .font(.parkinsansSemibold(size: CGFloat(16)))
+
+          Text("Share Highlight")
+          Image("ActionShare")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 18, height: 18)
         }
+
       }
-      .foregroundStyle(buttonForeground)
-      .padding(.horizontal, 18)
-      .padding(.vertical, 14)
-      .frame(maxWidth: .infinity)
-      .background(buttonGradient, in: Capsule(style: .continuous))
-      // Subtle 3D highlight
-      .overlay(
-        Capsule(style: .continuous)
-          .stroke(
-            LinearGradient(
-              colors: [Color.white.opacity(0.55), Color.white.opacity(0.10)],
-              startPoint: .top,
-              endPoint: .bottom
-            ),
-            lineWidth: 1
-          )
-          .blendMode(.overlay)
-      )
-      // Depth
-      .shadow(color: Color.black.opacity(0.35), radius: 14, x: 0, y: 10)
-      .shadow(
-        color: Color.white.opacity(preferences.theme == .night ? 0.18 : 0.08), radius: 1, x: 0,
-        y: -1)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(LectorPrimaryCapsuleButtonStyle())
     .disabled(isSaving)
     .opacity(isSaving ? 0.7 : 1.0)
   }
@@ -221,6 +190,7 @@ struct HighlightShareEditorView: View {
     defer { isSaving = false }
 
     do {
+      async let _ = persistHighlightIfPossible()
 
       let img = try await HighlightShareRenderer.render(
         draft: currentDraft,
@@ -265,6 +235,25 @@ struct HighlightShareEditorView: View {
       withAnimation {
         showToast = false
       }
+    }
+  }
+
+  private func persistHighlightIfPossible() async {
+    guard let documentID, !documentID.isEmpty else { return }
+    let trimmed = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+    do {
+      _ = try await highlightsService.createHighlight(
+        documentID: documentID,
+        quote: trimmed,
+        pageNumber: pageNumber,
+        progress: progress
+      )
+    } catch {
+      // Non-fatal: sharing should still work even if persistence fails.
+      #if DEBUG
+        print("[HighlightShareEditorView] Failed to persist highlight: \(error)")
+      #endif
     }
   }
 }

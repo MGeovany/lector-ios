@@ -1,6 +1,10 @@
 import Foundation
 import Observation
 
+#if canImport(AuthenticationServices)
+  import AuthenticationServices
+#endif
+
 #if canImport(Sentry)
   import Sentry
 #endif
@@ -143,7 +147,10 @@ final class AppSession {
   }
 
   func beginGoogleSignIn() {
+    print("🟠 [AppSession] beginGoogleSignIn() called")
     let start = authService.beginGoogleOAuth()
+    print("🟠 [AppSession] OAuth URL generated: \(start.url.absoluteString)")
+    print("🟠 [AppSession] PKCE verifier length: \(start.pkceVerifier.count)")
     pkceVerifier = start.pkceVerifier
     lastOAuthURLString = start.url.absoluteString
     #if canImport(Sentry)
@@ -165,7 +172,10 @@ final class AppSession {
       && !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       && !urlString.contains(" ")
 
+    print("🟠 [AppSession] URL validation - scheme: \(scheme ?? "nil"), host: \(host), isValid: \(isValidForWebAuth)")
+
     guard isValidForWebAuth else {
+      print("🔴 [AppSession] Invalid OAuth URL: \(urlString)")
       #if canImport(Sentry)
         let crumb = Breadcrumb(level: .warning, category: "auth")
         crumb.message = "invalid_oauth_url"
@@ -180,15 +190,21 @@ final class AppSession {
     }
 
     // Run the OAuth flow and handle the callback in-app.
+    print("🟠 [AppSession] Starting OAuth web auth session")
+    print("🟠 [AppSession] Redirect scheme: \(SupabaseConfig.redirectScheme)")
     isAuthenticating = true
     Task {
       do {
+        print("🟠 [AppSession] Calling OAuthWebAuthSession.shared.start()")
         let callbackURL = try await OAuthWebAuthSession.shared.start(
           url: start.url,
           callbackScheme: SupabaseConfig.redirectScheme
         )
+        print("🟠 [AppSession] OAuth callback received: \(callbackURL.absoluteString)")
         await handleOAuthCallback(callbackURL)
       } catch {
+        print("🔴 [AppSession] OAuth error: \(error)")
+        print("🔴 [AppSession] Error description: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)")
         await MainActor.run {
           #if canImport(Sentry)
             let event = Event(error: error)
@@ -205,6 +221,40 @@ final class AppSession {
     }
   }
 
+  func signInWithApple(idToken: String, nonce: String) {
+    isAuthenticating = true
+    Task {
+      do {
+        let session = try await authService.signInWithApple(idToken: idToken, nonce: nonce)
+
+        KeychainStore.setString(session.accessToken, account: KeychainKeys.authToken)
+        if let refresh = session.refreshToken, !refresh.isEmpty {
+          KeychainStore.setString(refresh, account: KeychainKeys.refreshToken)
+        }
+        KeychainStore.setString(session.userID, account: KeychainKeys.userID)
+        isAuthenticated = true
+        #if canImport(Sentry)
+          SentrySDK.setUser(User(userId: session.userID))
+          let crumb = Breadcrumb(level: .info, category: "auth")
+          crumb.message = "apple_sign_in_completed"
+          SentrySDK.addBreadcrumb(crumb)
+        #endif
+
+        await refreshProfileIfNeeded()
+        await syncAccountStatus()
+      } catch {
+        #if canImport(Sentry)
+          let event = Event(error: error)
+          event.level = .error
+          event.fingerprint = ["apple_sign_in_failed", String(describing: type(of: error))]
+          SentrySDK.capture(event: event)
+        #endif
+        alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to sign in."
+      }
+      isAuthenticating = false
+    }
+  }
+
   func cancelOAuth() {
     isShowingOAuth = false
     oauthURL = nil
@@ -212,8 +262,13 @@ final class AppSession {
   }
 
   func handleOAuthCallback(_ url: URL) async {
+    print("🟠 [AppSession] handleOAuthCallback called with URL: \(url.absoluteString)")
+    print("🟠 [AppSession] URL scheme: \(url.scheme ?? "nil"), expected: \(SupabaseConfig.redirectScheme)")
     // Only handle our OAuth callback.
-    guard url.scheme == SupabaseConfig.redirectScheme else { return }
+    guard url.scheme == SupabaseConfig.redirectScheme else {
+      print("🔴 [AppSession] Callback URL scheme mismatch. Ignoring callback.")
+      return
+    }
 
     // Dismiss the browser as soon as we get the callback.
     isShowingOAuth = false
@@ -223,8 +278,13 @@ final class AppSession {
     defer { isAuthenticating = false }
 
     do {
+      print("🟠 [AppSession] Completing OAuth with callback URL")
+      print("🟠 [AppSession] Has PKCE verifier: \(pkceVerifier != nil)")
       let session = try await authService.completeOAuth(
         callbackURL: url, pkceVerifier: pkceVerifier)
+      print("🟠 [AppSession] OAuth completed successfully")
+      print("🟠 [AppSession] User ID: \(session.userID)")
+      print("🟠 [AppSession] Has refresh token: \(session.refreshToken != nil)")
       pkceVerifier = nil
 
       KeychainStore.setString(session.accessToken, account: KeychainKeys.authToken)
@@ -233,6 +293,7 @@ final class AppSession {
       }
       KeychainStore.setString(session.userID, account: KeychainKeys.userID)
       isAuthenticated = true
+      print("🟠 [AppSession] Session saved to keychain, isAuthenticated = true")
       #if canImport(Sentry)
         SentrySDK.setUser(User(userId: session.userID))
 
@@ -244,6 +305,8 @@ final class AppSession {
       // Sync account status with backend after successful login.
       await syncAccountStatus()
     } catch {
+      print("🔴 [AppSession] Error completing OAuth: \(error)")
+      print("🔴 [AppSession] Error description: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)")
       pkceVerifier = nil
       #if canImport(Sentry)
         let event = Event(error: error)

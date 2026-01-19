@@ -72,6 +72,11 @@ final class HomeViewModel {
         .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
       books = next
     } catch {
+      // If we already have content, avoid blocking the UX with an alert on transient network failures
+      // (e.g. pull-to-refresh while offline). Keep existing books visible.
+      if !books.isEmpty, (error as? APIError) == .network {
+        return
+      }
       alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to load documents."
     }
   }
@@ -172,6 +177,38 @@ final class HomeViewModel {
       await refreshTags()
     } catch {
       alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to create tag."
+    }
+  }
+
+  func deleteTag(name: String) async {
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+    do {
+      try await documentsService.deleteDocumentTag(name: trimmed)
+      await refreshTags()
+      // If any books were using this tag, remove it from them
+      for idx in books.indices {
+        if books[idx].tags.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+          books[idx].tags.removeAll { $0.caseInsensitiveCompare(trimmed) == .orderedSame }
+        }
+      }
+    } catch {
+      // Ignore "Tag not found" errors - tag may have already been deleted
+      let errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+      if !errorMessage.lowercased().contains("tag not found")
+        && !errorMessage.lowercased().contains("not found")
+      {
+        alertMessage = errorMessage
+      } else {
+        // Tag doesn't exist, just remove it locally and refresh
+        await refreshTags()
+        for idx in books.indices {
+          if books[idx].tags.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame })
+          {
+            books[idx].tags.removeAll { $0.caseInsensitiveCompare(trimmed) == .orderedSame }
+          }
+        }
+      }
     }
   }
 
@@ -301,10 +338,23 @@ final class HomeViewModel {
     let base: [Book] = {
       switch filter {
       case .recents:
-        // Return books sorted by last opened (most recent first)
-        return books.sorted { $0.lastOpenedSortDate > $1.lastOpenedSortDate }
+        // Unread first, then most recently opened.
+        return books.sorted { lhs, rhs in
+          if lhs.isRead != rhs.isRead { return !lhs.isRead }
+          if lhs.lastOpenedSortDate != rhs.lastOpenedSortDate {
+            return lhs.lastOpenedSortDate > rhs.lastOpenedSortDate
+          }
+          // Deterministic tie-breaker (stable-ish ordering).
+          return lhs.id.uuidString < rhs.id.uuidString
+        }
       case .all:
-        return books
+        // Unread first, then title (A→Z).
+        return books.sorted { lhs, rhs in
+          if lhs.isRead != rhs.isRead { return !lhs.isRead }
+          let c = lhs.title.localizedCaseInsensitiveCompare(rhs.title)
+          if c != .orderedSame { return c == .orderedAscending }
+          return lhs.id.uuidString < rhs.id.uuidString
+        }
       case .read:
         return books.filter { $0.isRead }
       }

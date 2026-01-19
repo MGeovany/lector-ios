@@ -1,9 +1,11 @@
+import AuthenticationServices
 import SwiftUI
 
 struct WelcomeView: View {
   @Environment(AppSession.self) private var session
   @State private var isShowingPhoneAlert: Bool = false
   @State private var isShowingAuthAlert: Bool = false
+  @State private var appleNonce: String?
 
   var body: some View {
     ZStack {
@@ -68,7 +70,9 @@ struct WelcomeView: View {
   private var footer: some View {
     VStack(spacing: 12) {
       Button {
+        print("🟠 [WelcomeView] Google Sign In button tapped")
         session.beginGoogleSignIn()
+        print("🟠 [WelcomeView] beginGoogleSignIn() called")
       } label: {
         HStack(spacing: 10) {
           Image("GoogleLogo")
@@ -86,33 +90,47 @@ struct WelcomeView: View {
         .frame(height: 52)
         .background(Color.white)
         .overlay(
-          Capsule().stroke(Color.black.opacity(0.10), lineWidth: 1)
+          Capsule().stroke(Color.black.opacity(0.30), lineWidth: 1)
         )
         .clipShape(Capsule())
       }
       .buttonStyle(.plain)
 
-      Button {
-        isShowingPhoneAlert = true
-      } label: {
-        HStack(spacing: 10) {
-          Image(systemName: "phone.fill")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 26, height: 26)
-            .background(Circle().fill(Color.white.opacity(0.18)))
-
-          Text("Continue with phone")
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(.white)
+      SignInWithAppleButton(.signIn) { request in
+        let rawNonce = AppleSignInNonce.random()
+        appleNonce = rawNonce
+        request.requestedScopes = [.email, .fullName]
+        request.nonce = AppleSignInNonce.sha256(rawNonce)
+      } onCompletion: { result in
+        guard let rawNonce = appleNonce, !rawNonce.isEmpty else {
+          session.alertMessage = "Couldn't start Apple sign-in. Missing nonce."
+          return
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 18)
-        .frame(height: 52)
-        .background(AppColors.matteBlack)
-        .clipShape(Capsule())
+
+        switch result {
+        case .success(let auth):
+          guard let credential = auth.credential as? ASAuthorizationAppleIDCredential else {
+            session.alertMessage = "Apple sign-in failed. Invalid credentials."
+            return
+          }
+          guard
+            let tokenData = credential.identityToken,
+            let idToken = String(data: tokenData, encoding: .utf8),
+            !idToken.isEmpty
+          else {
+            session.alertMessage = "Apple sign-in failed. Missing identity token."
+            return
+          }
+          session.signInWithApple(idToken: idToken, nonce: rawNonce)
+        case .failure(let error):
+          // User cancel is common; keep message short.
+          session.alertMessage =
+            (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
       }
-      .buttonStyle(.plain)
+      .frame(height: 52)
+      .frame(maxWidth: .infinity)
+      .signInWithAppleButtonStyle(.black)
 
       Text("By continuing, you agree to our Privacy Policy and Terms & Conditions.")
         .font(.system(size: 12, weight: .medium))

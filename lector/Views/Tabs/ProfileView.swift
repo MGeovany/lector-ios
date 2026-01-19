@@ -11,7 +11,9 @@ struct ProfileView: View {
   @EnvironmentObject private var subscription: SubscriptionStore
   @Environment(AppSession.self) private var session
   @Environment(\.openURL) private var openURL
+  @Environment(\.colorScheme) private var colorScheme
   @State private var showPremiumSheet: Bool = false
+  @State private var showEditProfilePicture: Bool = false
   @State private var showDeleteAccountConfirm: Bool = false
   @State private var showLogoutConfirm: Bool = false
   @State private var showAccountDeletedAlert: Bool = false
@@ -53,6 +55,25 @@ struct ProfileView: View {
               email: "marlon.castro@thefndrs.com",
               badge: profileBadge
             )
+          }
+
+          Button {
+            showEditProfilePicture = true
+          } label: {
+            // flex space between.
+            HStack(alignment: .center, spacing: 10) {
+              Text("Edit profile picture")
+                .font(.parkinsans(size: 15, weight: .medium))
+                // matte si es tema white letras negras, si es tema negro letras blancas
+                .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
+
+              Spacer(minLength: 0)
+
+              Image(systemName: "shuffle")
+                .font(.parkinsans(size: 15, weight: .medium))
+                .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
+            }
+            .frame(maxWidth: .infinity)
           }
         }
 
@@ -182,6 +203,11 @@ struct ProfileView: View {
       .sheet(isPresented: $showPremiumSheet) {
         PremiumUpsellSheetView()
           .environmentObject(subscription)
+      }
+      .sheet(isPresented: $showEditProfilePicture) {
+        EditProfilePictureSheetView()
+          .presentationDetents([.height(320)])
+          .presentationDragIndicator(.visible)
       }
       .task {
         // In Xcode Previews we inject a fake SubscriptionStore (e.g. proYearly).
@@ -649,7 +675,7 @@ private struct BenefitRow: View {
 
 #Preview("Founder User") {
   let founderSubscription = SubscriptionStore(
-    initialPlan: .free, persistToDefaults: false)
+    initialPlan: .founderLifetime, persistToDefaults: false)
   NavigationStack {
     ProfileView()
       .environment(AppSession())

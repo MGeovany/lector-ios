@@ -202,8 +202,14 @@ struct FavoritesView: View {
       }
     }()
 
-    // Default sort: recently opened
-    return searched.sorted { $0.lastOpenedSortDate > $1.lastOpenedSortDate }
+    // Unread first, then recently opened.
+    return searched.sorted { lhs, rhs in
+      if lhs.isRead != rhs.isRead { return !lhs.isRead }
+      if lhs.lastOpenedSortDate != rhs.lastOpenedSortDate {
+        return lhs.lastOpenedSortDate > rhs.lastOpenedSortDate
+      }
+      return lhs.id.uuidString < rhs.id.uuidString
+    }
   }
 }
 

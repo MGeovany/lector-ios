@@ -86,8 +86,9 @@ final class GoDocumentsService: DocumentsServicing {
   }
 
   func deleteDocumentTag(name: String) async throws {
-    // Backend expects tag name in path
-    let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
-    try await api.delete("document-tags/\(encoded)")
+    // NOTE: Do NOT pre-encode here.
+    // APIClient builds URLs via `baseURL.appendingPathComponent(...)` which performs encoding.
+    // Pre-encoding would double-encode (e.g. "New%20tag" -> "New%2520tag") and backend can't find it.
+    try await api.delete("document-tags/\(name)")
   }
 }

@@ -22,7 +22,13 @@ struct HomeView: View {
         ScrollView(showsIndicators: false) {
           VStack(alignment: .leading, spacing: 16) {
             HomeHeaderView(
-              searchText: $viewModel.searchQuery, onAddTapped: { showFilePicker = true })
+              searchText: $viewModel.searchQuery,
+              onAddTapped: {
+                print("🔵 [HomeView] HomeHeaderView add button tapped")
+                print("🔵 [HomeView] showFilePicker before: \(showFilePicker)")
+                showFilePicker = true
+                print("🔵 [HomeView] showFilePicker after: \(showFilePicker)")
+              })
 
             // Filter buttons: Recents, All, Read
             // (Temporarily hidden per design review; keep logic intact.)
@@ -45,6 +51,20 @@ struct HomeView: View {
             if viewModel.filteredBooks.isEmpty && viewModel.isLoading {
               HomeSkeletonList()
                 .padding(.top, 6)
+            } else if !viewModel.isLoading && viewModel.books.isEmpty {
+              EmptyLibraryPlaceholderView(
+                colorScheme: colorScheme,
+                onAddTapped: {
+                  print("🟢 [HomeView] EmptyLibraryPlaceholderView add button tapped")
+                  print("🟢 [HomeView] showFilePicker before: \(showFilePicker)")
+                  showFilePicker = true
+                  print("🟢 [HomeView] showFilePicker after: \(showFilePicker)")
+                }
+              )
+              .padding(.top, 22)
+            } else if viewModel.filteredBooks.isEmpty {
+              EmptySearchPlaceholderView(colorScheme: colorScheme)
+                .padding(.top, 22)
             } else {
               LazyVStack(spacing: 14) {
                 ForEach(viewModel.filteredBooks) { book in
@@ -100,14 +120,24 @@ struct HomeView: View {
       allowedContentTypes: [UTType.pdf],
       allowsMultipleSelection: false
     ) { result in
+      print("🟡 [HomeView] fileImporter result received")
+      print("🟡 [HomeView] showFilePicker value: \(showFilePicker)")
       switch result {
       case .success(let urls):
+        print("🟡 [HomeView] fileImporter success, urls count: \(urls.count)")
         if let url = urls.first {
+          print("🟡 [HomeView] Starting upload for URL: \(url)")
           Task { await addViewModel.uploadPickedPDF(url) }
+        } else {
+          print("🟡 [HomeView] No URL found in urls array")
         }
       case .failure(let error):
+        print("🔴 [HomeView] fileImporter error: \(error.localizedDescription)")
         viewModel.alertMessage = error.localizedDescription
       }
+    }
+    .onChange(of: showFilePicker) { _, newValue in
+      print("🟣 [HomeView] showFilePicker changed to: \(newValue)")
     }
     .overlay(alignment: .top) {
       // Subtle, non-blocking loading indicator.
@@ -130,14 +160,14 @@ struct HomeView: View {
         .padding(.bottom, 86)
       }
     }
-    .overlay(alignment: .bottom) {
+    .overlay(alignment: .top) {
       if let toast {
         UploadToastView(toast: toast)
-          .padding(.bottom, 86)
-          .transition(.move(edge: .bottom).combined(with: .opacity))
+          .padding(.top, 8)
+          .transition(.move(edge: .top).combined(with: .opacity))
       }
     }
-    .onChange(of: addViewModel.didUploadSuccessfully) { didSucceed in
+    .onChange(of: addViewModel.didUploadSuccessfully) { _, didSucceed in
       guard didSucceed else { return }
       withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
         toast = UploadToastData(kind: .success, message: "Uploaded.")
@@ -148,7 +178,7 @@ struct HomeView: View {
         withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
       }
     }
-    .onChange(of: addViewModel.alertMessage) { msg in
+    .onChange(of: addViewModel.alertMessage) { _, msg in
       let trimmed = (msg ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
       guard !trimmed.isEmpty else { return }
       withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
@@ -190,6 +220,96 @@ struct HomeView: View {
 }
 
 // MARK: - Upload Toast (non-blocking)
+
+private struct EmptyLibraryPlaceholderView: View {
+  let colorScheme: ColorScheme
+  let onAddTapped: () -> Void
+
+  var body: some View {
+    GeometryReader { geometry in
+      VStack(spacing: 14) {
+        Spacer()
+
+        Text("How about to start with a book?")
+          .font(.parkinsans(size: 20, weight: .light))
+          .foregroundStyle(
+            colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack.opacity(0.90)
+          )
+          .multilineTextAlignment(.center)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.horizontal, 14)
+
+        Button {
+          print("🟢 [EmptyLibraryPlaceholderView] Add File button tapped")
+          onAddTapped()
+          print("🟢 [EmptyLibraryPlaceholderView] onAddTapped called")
+        } label: {
+          HStack(spacing: 10) {
+            Text("Add File")
+            Image(systemName: "plus.circle.fill")
+          }
+
+        }
+        .buttonStyle(LectorPrimaryRoundedButtonStyle(cornerRadius: 12))
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.top, 8)
+
+        Spacer()
+      }
+      .frame(maxWidth: .infinity)
+      .frame(height: geometry.size.height)
+      .padding(.horizontal, 8)
+    }
+    .frame(minHeight: 400)
+  }
+
+  private var titleColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack.opacity(0.92)
+  }
+
+  private var subtitleColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.55) : AppColors.matteBlack.opacity(0.55)
+  }
+
+  private var iconColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.60) : AppColors.matteBlack.opacity(0.40)
+  }
+}
+
+private struct EmptySearchPlaceholderView: View {
+  let colorScheme: ColorScheme
+
+  var body: some View {
+    VStack(spacing: 12) {
+      Image(systemName: "magnifyingglass")
+        .font(.system(size: 28, weight: .semibold))
+        .foregroundStyle(iconColor)
+        .padding(.bottom, 2)
+
+      Text("No results")
+        .font(.parkinsans(size: 18, weight: .semibold))
+        .foregroundStyle(titleColor)
+
+      Text("Try a different search term.")
+        .font(.parkinsans(size: 14, weight: .medium))
+        .foregroundStyle(subtitleColor)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 18)
+  }
+
+  private var titleColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack.opacity(0.92)
+  }
+
+  private var subtitleColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.55) : AppColors.matteBlack.opacity(0.55)
+  }
+
+  private var iconColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.60) : AppColors.matteBlack.opacity(0.40)
+  }
+}
 
 private struct UploadToastData: Equatable {
   enum Kind: Equatable {
@@ -436,4 +556,17 @@ struct FilterTabsView: View {
         }
     }
   }
+}
+
+#Preview("Home (Empty)") {
+  HomeView()
+    .environmentObject(PreferencesViewModel())
+    .environmentObject(SubscriptionStore())
+}
+
+#Preview("Home (Empty • Dark)") {
+  HomeView()
+    .preferredColorScheme(.dark)
+    .environmentObject(PreferencesViewModel())
+    .environmentObject(SubscriptionStore())
 }

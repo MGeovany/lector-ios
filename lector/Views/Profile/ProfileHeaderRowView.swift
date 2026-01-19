@@ -10,15 +10,15 @@ struct ProfileHeaderRowView: View {
   let email: String
   var avatarURL: URL? = nil
   var badge: ProfilePlanBadge? = nil
+  @AppStorage(AppPreferenceKeys.profileAvatarHeadAssetName) private var headAssetName: String = ""
+  @AppStorage(AppPreferenceKeys.profileAvatarFaceAssetName) private var faceAssetName: String = ""
 
   var body: some View {
     HStack(spacing: 14) {
       ZStack {
-        Circle()
-          .fill(Color(.secondarySystemBackground))
-          .frame(width: 54, height: 54)
-
-        if let avatarURL {
+        if let selection, selection.hasAny {
+          ProfileAvatarView(selection: selection, size: 54, showBorder: false)
+        } else if let avatarURL {
           AsyncImage(url: avatarURL) { phase in
             switch phase {
             case .success(let image):
@@ -59,6 +59,13 @@ struct ProfileHeaderRowView: View {
       Spacer()
     }
     .padding(.vertical, 2)
+  }
+
+  private var selection: ProfileAvatarSelection? {
+    let head = headAssetName.trimmingCharacters(in: .whitespacesAndNewlines)
+    let face = faceAssetName.trimmingCharacters(in: .whitespacesAndNewlines)
+    let direct = ProfileAvatarSelection(headAssetName: head, faceAssetName: face, accessoryAssetName: "")
+    return direct.hasAny ? direct : ProfileAvatarStore.currentSelection()
   }
 
   @ViewBuilder

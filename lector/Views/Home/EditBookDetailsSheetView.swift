@@ -11,12 +11,16 @@ struct EditBookDetailsSheetView: View {
 
   let onCancel: () -> Void
   let onSave: (_ title: String, _ author: String, _ tag: String, _ color: BookCardColor) -> Void
+  let onDeleteTag: ((String) -> Void)?
+  let onCreateTag: ((String) -> Void)?
 
   @State private var title: String
   @State private var author: String
   @State private var tag: String
   @State private var selectedColor: BookCardColor
   @State private var didAutoSaveOnDisappear: Bool = false
+  @State private var didManualSave: Bool = false
+  @State private var localAvailableTags: [String]
 
   init(
     colorScheme: ColorScheme,
@@ -27,7 +31,9 @@ struct EditBookDetailsSheetView: View {
     initialColor: BookCardColor,
     onCancel: @escaping () -> Void,
     onSave:
-      @escaping (_ title: String, _ author: String, _ tag: String, _ color: BookCardColor) -> Void
+      @escaping (_ title: String, _ author: String, _ tag: String, _ color: BookCardColor) -> Void,
+    onDeleteTag: ((String) -> Void)? = nil,
+    onCreateTag: ((String) -> Void)? = nil
   ) {
     self.colorScheme = colorScheme
     self.availableTags = availableTags
@@ -37,11 +43,14 @@ struct EditBookDetailsSheetView: View {
     self.initialColor = initialColor
     self.onCancel = onCancel
     self.onSave = onSave
+    self.onDeleteTag = onDeleteTag
+    self.onCreateTag = onCreateTag
 
     _title = State(initialValue: initialTitle)
     _author = State(initialValue: initialAuthor)
     _tag = State(initialValue: initialTag)
     _selectedColor = State(initialValue: initialColor)
+    _localAvailableTags = State(initialValue: availableTags)
   }
 
   var body: some View {
@@ -84,27 +93,42 @@ struct EditBookDetailsSheetView: View {
         ToolbarItem(placement: .topBarLeading) {
           Button("Back", action: onCancel)
         }
+        ToolbarItem(placement: .topBarTrailing) {
+          Button("Save") {
+            let didSave = saveChanges()
+            guard !didSave else { return }  // Parent usually dismisses on save.
+            // Even if nothing changed, Save should dismiss.
+            didManualSave = true
+            onCancel()
+          }
+        }
       }
       .onDisappear {
-        // Auto-save: details persist without requiring an explicit "Save" action.
+        // Auto-save: details persist if not manually saved.
         // Also saves when the user dismisses via swipe.
-        guard !didAutoSaveOnDisappear else { return }
+        guard !didAutoSaveOnDisappear && !didManualSave else { return }
         didAutoSaveOnDisappear = true
-
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedAuthor = author.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let didChange =
-          trimmedTitle != initialTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-          || trimmedAuthor != initialAuthor.trimmingCharacters(in: .whitespacesAndNewlines)
-          || trimmedTag != initialTag.trimmingCharacters(in: .whitespacesAndNewlines)
-          || selectedColor != initialColor
-
-        guard didChange else { return }
-        onSave(trimmedTitle, trimmedAuthor, trimmedTag, selectedColor)
+        _ = saveChanges()
       }
     }
+  }
+
+  @discardableResult
+  private func saveChanges() -> Bool {
+    let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedAuthor = author.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    let didChange =
+      trimmedTitle != initialTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+      || trimmedAuthor != initialAuthor.trimmingCharacters(in: .whitespacesAndNewlines)
+      || trimmedTag != initialTag.trimmingCharacters(in: .whitespacesAndNewlines)
+      || selectedColor != initialColor
+
+    guard didChange else { return false }
+    didManualSave = true
+    onSave(trimmedTitle, trimmedAuthor, trimmedTag, selectedColor)
+    return true
   }
 
   private var tagField: some View {
@@ -118,6 +142,22 @@ struct EditBookDetailsSheetView: View {
           .font(.parkinsansSemibold(size: 15))
           .textInputAutocapitalization(.never)
           .disableAutocorrection(true)
+          .onSubmit {
+            let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty,
+              !localAvailableTags.contains(where: {
+                $0.caseInsensitiveCompare(trimmed) == .orderedSame
+              })
+            {
+              if let onCreateTag = onCreateTag {
+                localAvailableTags.append(trimmed)
+                localAvailableTags.sort {
+                  $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+                }
+                onCreateTag(trimmed)
+              }
+            }
+          }
 
         if !tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
           Button {
@@ -130,28 +170,51 @@ struct EditBookDetailsSheetView: View {
         }
       }
 
-      if !availableTags.isEmpty {
+      if !localAvailableTags.isEmpty {
         ScrollView(.horizontal, showsIndicators: false) {
           HStack(spacing: 8) {
-            ForEach(availableTags.prefix(12), id: \.self) { t in
-              Button {
-                tag = t
-              } label: {
-                Text(t)
-                  .font(.parkinsansSemibold(size: 12))
-                  .foregroundStyle(
-                    colorScheme == .dark ? Color.white.opacity(0.85) : AppColors.matteBlack
-                  )
-                  .padding(.horizontal, 10)
-                  .padding(.vertical, 8)
-                  .background(
-                    Capsule(style: .continuous)
-                      .fill(
-                        colorScheme == .dark
-                          ? Color.white.opacity(0.10) : Color(.secondarySystemBackground))
-                  )
+            ForEach(localAvailableTags.prefix(12), id: \.self) { t in
+              HStack(spacing: 6) {
+                HStack(spacing: 6) {
+                  Button {
+                    tag = t
+                  } label: {
+                    Text(t)
+                      .font(.parkinsansSemibold(size: 12))
+                      .foregroundStyle(
+                        colorScheme == .dark ? Color.white.opacity(0.85) : AppColors.matteBlack
+                      )
+                  }
+                  .buttonStyle(.plain)
+
+                  if let onDeleteTag = onDeleteTag {
+                    Button {
+                      localAvailableTags.removeAll { $0 == t }
+                      if tag.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(
+                        t) == .orderedSame
+                      {
+                        tag = ""
+                      }
+                      onDeleteTag(t)
+                    } label: {
+                      Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(
+                          colorScheme == .dark ? Color.white.opacity(0.35) : .secondary
+                        )
+                    }
+                    .buttonStyle(.plain)
+                  }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                  Capsule(style: .continuous)
+                    .fill(
+                      colorScheme == .dark
+                        ? Color.white.opacity(0.10) : Color(.secondarySystemBackground))
+                )
               }
-              .buttonStyle(.plain)
             }
           }
         }

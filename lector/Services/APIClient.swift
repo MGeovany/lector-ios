@@ -57,7 +57,73 @@ private struct APIErrorEnvelope: Decodable {
   let error: String
 }
 
-private struct EmptyResponse: Decodable {}
+/// Marker for Decodable types that can treat a JSON `null` response as an "empty" value.
+private protocol NullAsEmptyDecodable {
+  static var emptyValue: Self { get }
+}
+
+extension Array: NullAsEmptyDecodable {
+  fileprivate static var emptyValue: [Element] { [] }
+}
+
+extension Dictionary: NullAsEmptyDecodable {
+  fileprivate static var emptyValue: [Key: Value] { [:] }
+}
+
+/// A "don't care" response body that can decode from any JSON (object/array/string/etc)
+/// or even an empty response body.
+private struct EmptyResponse: Decodable {
+  init() {}
+
+  init(from decoder: Decoder) throws {
+    // Accept any JSON shape and ignore it.
+    _ = try AnyJSON(from: decoder)
+  }
+}
+
+/// Minimal dynamic JSON type used to swallow/ignore response bodies.
+private indirect enum AnyJSON: Decodable {
+  case string(String)
+  case number(Double)
+  case bool(Bool)
+  case object([String: AnyJSON])
+  case array([AnyJSON])
+  case null
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.singleValueContainer()
+
+    if container.decodeNil() {
+      self = .null
+      return
+    }
+    if let b = try? container.decode(Bool.self) {
+      self = .bool(b)
+      return
+    }
+    if let n = try? container.decode(Double.self) {
+      self = .number(n)
+      return
+    }
+    if let s = try? container.decode(String.self) {
+      self = .string(s)
+      return
+    }
+    if let a = try? container.decode([AnyJSON].self) {
+      self = .array(a)
+      return
+    }
+    if let o = try? container.decode([String: AnyJSON].self) {
+      self = .object(o)
+      return
+    }
+
+    throw DecodingError.typeMismatch(
+      AnyJSON.self,
+      .init(codingPath: decoder.codingPath, debugDescription: "Unsupported JSON value")
+    )
+  }
+}
 
 final class APIClient {
   private let baseURL: URL
@@ -199,6 +265,7 @@ final class APIClient {
       guard let http = response as? HTTPURLResponse else {
         throw APIError.invalidResponse
       }
+      let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
 
       if !(200...299).contains(http.statusCode) {
         #if canImport(Sentry)
@@ -256,14 +323,49 @@ final class APIClient {
       }
 
       do {
+        // Some endpoints return an empty body even on success (common for "204 No Content"
+        // or when handlers return plain text). Treat that as success for EmptyResponse.
+        if data.isEmpty, decode == EmptyResponse.self {
+          return EmptyResponse() as! T
+        }
+
+        // Some endpoints incorrectly return JSON `null` for collections when empty.
+        // Treat `null` as empty for Array/Dictionary payloads.
+        let trimmed = String(data: data, encoding: .utf8)?
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+          .lowercased()
+        if trimmed == "null", let empty = (T.self as? NullAsEmptyDecodable.Type)?.emptyValue as? T {
+          return empty
+        }
+
         return try APIClient.jsonDecoder.decode(T.self, from: data)
       } catch {
+        #if DEBUG
+          let urlString = request.url?.absoluteString ?? ""
+          let method = request.httpMethod ?? ""
+          let previewData = data.prefix(2_048)
+          let preview =
+            String(data: previewData, encoding: .utf8)
+            ?? "<non-utf8 body, \(data.count) bytes>"
+          print(
+            """
+            [APIClient] Decode failed
+              - request: \(method) \(urlString)
+              - status: \(http.statusCode)
+              - content-type: \(contentType)
+              - body-preview(\(previewData.count)/\(data.count) bytes): \(preview)
+            """
+          )
+        #endif
         #if canImport(Sentry)
           let event = Event(error: APIError.decoding)
           event.level = .error
           event.extra = [
             "method": request.httpMethod ?? "",
             "url": request.url?.absoluteString ?? "",
+            "status": String(http.statusCode),
+            "content_type": contentType,
+            "body_preview": String(data: data.prefix(2_048), encoding: .utf8) ?? "",
           ]
           event.fingerprint = [
             "api_decoding_failed", request.httpMethod ?? "", request.url?.path ?? "",

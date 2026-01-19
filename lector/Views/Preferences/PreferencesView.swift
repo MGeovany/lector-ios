@@ -135,7 +135,7 @@ struct PreferencesView: View {
 
   private var header: some View {
     Text("Preferences")
-      .font(.parkinsansMedium(size: 50))
+      .font(.parkinsansMedium(size: 70))
       .foregroundStyle(
         colorScheme == .dark ? Color.white.opacity(0.75) : AppColors.matteBlack)
   }

@@ -6,8 +6,6 @@ struct UpgradeToPremiumCardView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let buttonFill = AppColors.primaryButtonFill(for: colorScheme)
-
         VStack(alignment: .leading, spacing: 14) {
             Text("Upgrade to Premium")
                 .font(.parkinsansBold(size: 18))
@@ -19,16 +17,8 @@ struct UpgradeToPremiumCardView: View {
 
             Button(action: onUpgradeTapped) {
                 Text("Upgrade")
-                    .font(.parkinsansSemibold(size: 15))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(buttonFill)
-                    )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LectorPrimaryRoundedButtonStyle(cornerRadius: 12))
         }
         .padding(16)
         .background(

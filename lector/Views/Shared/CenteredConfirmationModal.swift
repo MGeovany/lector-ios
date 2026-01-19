@@ -73,7 +73,9 @@ private struct CenteredModalButtonStyle: ButtonStyle {
   private var backgroundFill: Color {
     switch variant {
     case .primary:
-      return AppColors.primaryButtonFill(for: colorScheme)
+      // Primary CTA uses unified 3D black style. Background here is only used as a fill color,
+      // so we use the "bottom" tone to match the button style closely.
+      return AppColors.primaryActionBackgroundBottom
     case .secondary:
       return Color(.secondarySystemBackground)
     case .destructive:
@@ -83,7 +85,9 @@ private struct CenteredModalButtonStyle: ButtonStyle {
 
   private var foregroundStyle: Color {
     switch variant {
-    case .primary, .destructive:
+    case .primary:
+      return AppColors.primaryActionForeground
+    case .destructive:
       return .white
     case .secondary:
       return Color.primary

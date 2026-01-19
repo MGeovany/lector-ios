@@ -35,9 +35,11 @@ struct MainTabView: View {
           // Extend the bar to the absolute bottom (covers the home-indicator safe area)
           // to avoid a white gap below the bar.
           .ignoresSafeArea(.container, edges: .bottom)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
       }
     }
     .animation(.spring(response: 0.28, dampingFraction: 0.9), value: selectedTab)
+    .animation(.spring(response: 0.22, dampingFraction: 0.9), value: isTabBarHidden)
     .onPreferenceChange(TabBarHiddenPreferenceKey.self) { shouldHide in
       withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
         isTabBarHidden = shouldHide
@@ -49,30 +51,31 @@ struct MainTabView: View {
     HStack(spacing: 0) {
       TabBarItemButton(
         title: "Home",
-        icon: selectedTab == .home ? .asset("HomeIconActive") : .asset("HomeIcon"),
+        icon: selectedTab == .home ? .asset("TabHomeActive") : .asset("TabHome"),
         isSelected: selectedTab == .home,
         action: { selectedTab = .home }
       )
 
       TabBarItemButton(
         title: "Favorites",
-        icon: selectedTab == .favorites ? .system("heart.fill") : .system("heart"),
+        icon: selectedTab == .favorites ? .asset("TabFavoriteActive") : .asset("TabFavorite"),
         isSelected: selectedTab == .favorites,
         action: { selectedTab = .favorites }
       )
 
       TabBarItemButton(
         title: "Preferences",
-        icon: selectedTab == .preferences
-          ? .system("line.3.horizontal.decrease.circle.fill")
-          : .system("line.3.horizontal.decrease.circle"),
+        icon: selectedTab == .preferences ? .asset("TabSettingsActive") : .asset("TabSettings"),
         isSelected: selectedTab == .preferences,
         action: { selectedTab = .preferences }
       )
 
       TabBarItemButton(
         title: "Profile",
-        icon: .profileAvatar(url: session.profile?.avatarURL),
+        icon: .profileAvatar(
+          url: session.profile?.avatarURL,
+          selection: ProfileAvatarStore.currentSelection()
+        ),
         isSelected: selectedTab == .profile,
         action: { selectedTab = .profile }
       )
@@ -124,7 +127,7 @@ struct TabBarItemButton: View {
 enum TabBarIcon: Equatable {
   case system(String)
   case asset(String)
-  case profileAvatar(url: URL?)
+  case profileAvatar(url: URL?, selection: ProfileAvatarSelection?)
 }
 
 struct TabBarIconView: View {
@@ -152,8 +155,8 @@ struct TabBarIconView: View {
         .frame(width: 24, height: 24)
         .foregroundStyle(foreground)
 
-    case .profileAvatar(let url):
-      tabProfileAvatar(url: url, showProRing: subscription.isPro)
+    case .profileAvatar(let url, let selection):
+      tabProfileAvatar(url: url, selection: selection, showProRing: subscription.isPro)
     }
   }
 
@@ -161,16 +164,20 @@ struct TabBarIconView: View {
     isSelected ? AppColors.tabSelected(for: colorScheme) : AppColors.tabUnselected(for: colorScheme)
   }
 
-  private func tabProfileAvatar(url: URL?, showProRing: Bool) -> some View {
+  private func tabProfileAvatar(url: URL?, selection: ProfileAvatarSelection?, showProRing: Bool)
+    -> some View
+  {
     if !showProRing {
-      return AnyView(tabProfileAvatarPlain(url: url))
+      return AnyView(tabProfileAvatarPlain(url: url, selection: selection))
     }
-    return AnyView(tabProfileAvatarWithProRing(url: url))
+    return AnyView(tabProfileAvatarWithProRing(url: url, selection: selection))
   }
 
-  private func tabProfileAvatarPlain(url: URL?) -> some View {
+  private func tabProfileAvatarPlain(url: URL?, selection: ProfileAvatarSelection?) -> some View {
     Group {
-      if let url {
+      if let selection, selection.hasAny {
+        ProfileAvatarView(selection: selection, size: 24, showBorder: false)
+      } else if let url {
         AsyncImage(url: url) { phase in
           switch phase {
           case .success(let image):
@@ -195,10 +202,17 @@ struct TabBarIconView: View {
     .clipShape(Circle())
   }
 
-  private func tabProfileAvatarWithProRing(url: URL?) -> some View {
+  private func tabProfileAvatarWithProRing(url: URL?, selection: ProfileAvatarSelection?)
+    -> some View
+  {
     ZStack {
       Group {
-        if let url {
+        if let selection, selection.hasAny {
+          ProfileAvatarView(selection: selection, size: 24, showBorder: false)
+            .onAppear {
+              triggerProfileRingAnimationIfNeeded()
+            }
+        } else if let url {
           AsyncImage(url: url) { phase in
             switch phase {
             case .success(let image):

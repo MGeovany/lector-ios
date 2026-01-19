@@ -12,30 +12,39 @@ final class OAuthWebAuthSession: NSObject {
   private var session: ASWebAuthenticationSession?
 
   func start(url: URL, callbackScheme: String) async throws -> URL {
-    try await withCheckedThrowingContinuation { continuation in
+    print("🟠 [OAuthWebAuthSession] start() called")
+    print("🟠 [OAuthWebAuthSession] URL: \(url.absoluteString)")
+    print("🟠 [OAuthWebAuthSession] Callback scheme: \(callbackScheme)")
+    return try await withCheckedThrowingContinuation { continuation in
       let webAuth = ASWebAuthenticationSession(
         url: url,
         callbackURLScheme: callbackScheme
       ) { callbackURL, error in
         if let callbackURL {
+          print("🟠 [OAuthWebAuthSession] Callback received: \(callbackURL.absoluteString)")
           continuation.resume(returning: callbackURL)
           return
         }
         if let error = error as? ASWebAuthenticationSessionError,
           error.code == .canceledLogin
         {
+          print("🟠 [OAuthWebAuthSession] User cancelled login")
           continuation.resume(throwing: SupabaseAuthError.cancelled)
           return
         }
+        print(
+          "🔴 [OAuthWebAuthSession] Error in callback: \(error?.localizedDescription ?? "unknown")")
         continuation.resume(throwing: error ?? SupabaseAuthError.missingCallbackURL)
       }
 
       webAuth.presentationContextProvider = self
-      // Ephemeral is nicer for testing; avoids persisting sessions/cookies unexpectedly.
-      webAuth.prefersEphemeralWebBrowserSession = true
+      // Ephemeral sessions can cause some providers (notably Google) to hang/loop on login.
+      // Use the default (non-ephemeral) session to allow normal cookie persistence.
+      webAuth.prefersEphemeralWebBrowserSession = false
 
       self.session = webAuth
-      _ = webAuth.start()
+      let started = webAuth.start()
+      print("🟠 [OAuthWebAuthSession] Session started: \(started)")
     }
   }
 }

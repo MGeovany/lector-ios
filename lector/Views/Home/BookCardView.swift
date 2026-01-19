@@ -21,23 +21,30 @@ struct BookCardView: View {
         // cover
 
         VStack(alignment: .leading, spacing: 6) {
+          if !book.tags.isEmpty, let tag = book.tags.first {
+            Text(tag)
+              .font(.parkinsans(size: 12))
+              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.65) : .secondary)
+              .padding(.horizontal, 8)
+              .padding(.vertical, 4)
+              .background(
+                Capsule(style: .continuous)
+                  .fill(
+                    colorScheme == .dark
+                      ? Color.white.opacity(0.10) : Color(.secondarySystemBackground))
+              )
+              .padding(.bottom, 2)
+          }
+
           Text(book.title.uppercased())
             .font(.parkinsansMedium(size: 42))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : .primary)
             .lineLimit(2)
 
           Text(book.author)
-            .font(.parkinsansSemibold(size: 20))
+            .font(.parkinsans(size: 20))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.30) : .secondary)
-            .padding(.bottom, 10)
-
-          /*   Label(
-            "\(book.lastOpenedDaysAgo)d ago • \(formatBytes(book.sizeBytes))",
-            systemImage: "calendar"
-          )
-          .font(.parkinsansSemibold(size: 13))
-          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
- */
+            .padding(.bottom, 3)
 
           HStack(spacing: 6) {
 
@@ -45,11 +52,11 @@ struct BookCardView: View {
               "\(book.lastOpenedDisplayText) | ",
               systemImage: "calendar"
             )
-            .font(.parkinsansSemibold(size: 13))
+            .font(.parkinsans(size: 13))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
             Label("\(book.currentPage) of \(book.pagesTotal)", systemImage: "book")
-              .font(.parkinsansSemibold(size: 13))
+              .font(.parkinsans(size: 13))
               .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
           }
@@ -60,7 +67,7 @@ struct BookCardView: View {
         HStack(spacing: 2) {
           Button(action: onToggleFavorite) {
             Image(systemName: book.isFavorite ? "heart.fill" : "heart")
-              .font(.parkinsansSemibold(size: 16))
+              .font(.parkinsansMedium(size: 16))
               .foregroundStyle(
                 book.isFavorite
                   ? Color.red.opacity(0.90)
@@ -107,6 +114,21 @@ struct BookCardView: View {
                 }
               }
 
+              if !homeViewModel.availableTags.isEmpty {
+                Divider()
+                Menu {
+                  ForEach(homeViewModel.availableTags, id: \.self) { tag in
+                    Button {
+                      Task { await homeViewModel.deleteTag(name: tag) }
+                    } label: {
+                      Label(tag, systemImage: "xmark")
+                    }
+                  }
+                } label: {
+                  Label("Delete tag", systemImage: "xmark")
+                }
+              }
+
               if !book.tags.isEmpty {
                 Divider()
                 Button(role: .destructive) {
@@ -136,7 +158,7 @@ struct BookCardView: View {
             }
           } label: {
             Image(systemName: "ellipsis")
-              .font(.parkinsansSemibold(size: 18))
+              .font(.parkinsans(size: 18))
               .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.70) : .secondary)
               .frame(width: 36, height: 36)
               .contentShape(Rectangle())
@@ -145,14 +167,9 @@ struct BookCardView: View {
       }
 
       HStack(spacing: 14) {
-        /*   Label("Page \(book.currentPage) of \(book.pagesTotal)", systemImage: "book")
-            .font(.parkinsansSemibold(size: 13))
-            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
-        
-          Spacer() */
 
         Text("Progress: \(Int((book.progress * 100).rounded()))%")
-          .font(.parkinsansBold(size: 13))
+          .font(.parkinsans(size: 13))
           .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
           .padding(.top, 10)
 
@@ -208,6 +225,17 @@ struct BookCardView: View {
           Task {
             await homeViewModel.updateBookDetails(
               bookID: book.id, title: title, author: author, tag: tag)
+          }
+        },
+        onDeleteTag: { tagName in
+          Task {
+            await homeViewModel.deleteTag(name: tagName)
+          }
+        },
+        onCreateTag: { tagName in
+          Task {
+            await homeViewModel.createTag(name: tagName)
+            await homeViewModel.refreshTags()
           }
         }
       )
