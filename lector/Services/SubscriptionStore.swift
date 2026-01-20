@@ -51,6 +51,8 @@ final class SubscriptionStore: ObservableObject {
   @Published private(set) var lastErrorMessage: String?
   @Published private(set) var expirationDate: Date?
   @Published private(set) var isAutoRenewable: Bool = false
+  @Published private(set) var nextPlan: SubscriptionPlan?
+  @Published private(set) var nextPlanStartDate: Date?
 
   @MainActor private let storeKit = StoreKitService()
 
@@ -60,8 +62,7 @@ final class SubscriptionStore: ObservableObject {
     // Prefer explicit initial plan (useful for Previews/tests), otherwise load persisted plan.
     if let initialPlan {
       self.plan = initialPlan
-    } else if
-      let raw = UserDefaults.standard.string(forKey: Self.planKey),
+    } else if let raw = UserDefaults.standard.string(forKey: Self.planKey),
       let plan = SubscriptionPlan(rawValue: raw)
     {
       self.plan = plan
@@ -128,6 +129,12 @@ final class SubscriptionStore: ObservableObject {
     }
 
     do {
+      #if DEBUG
+        // If the user is "ignoring" Founder in debug, un-ignore before attempting to buy it.
+        if newPlan == .founderLifetime {
+          StoreKitService.debugIgnoreFounderEntitlement = false
+        }
+      #endif
       try await storeKit.loadProducts()
       let ent = try await storeKit.purchase(plan: newPlan)
       apply(entitlement: ent)
@@ -140,6 +147,8 @@ final class SubscriptionStore: ObservableObject {
     plan = .free
     expirationDate = nil
     isAutoRenewable = false
+    nextPlan = nil
+    nextPlanStartDate = nil
   }
 
   func upgradeToPremium() {
@@ -182,9 +191,24 @@ final class SubscriptionStore: ObservableObject {
     do {
       try await storeKit.showManageSubscriptions()
     } catch {
-      lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn’t open subscriptions."
+      lastErrorMessage =
+        (error as? LocalizedError)?.errorDescription ?? "Couldn’t open subscriptions."
     }
   }
+
+  #if DEBUG
+    var debugIsIgnoringFounderPurchase: Bool {
+      StoreKitService.debugIgnoreFounderEntitlement
+    }
+
+    /// Debug-only: "forget" Founder entitlement in-app (sandbox/local) so you can test Free/Pro flows.
+    /// Note: StoreKit non-consumables can't be truly "cancelled" via API; this is an app-side override.
+    @MainActor
+    func debugSetIgnoreFounderPurchase(_ ignore: Bool) async {
+      StoreKitService.debugIgnoreFounderEntitlement = ignore
+      await refreshFromStoreKit()
+    }
+  #endif
 
   @MainActor
   func priceText(for plan: SubscriptionPlan) -> String? {
@@ -196,6 +220,8 @@ final class SubscriptionStore: ObservableObject {
     plan = entitlement.plan
     expirationDate = entitlement.expirationDate
     isAutoRenewable = entitlement.isAutoRenewable
+    nextPlan = storeKit.nextEntitlementPlanChange?.nextPlan
+    nextPlanStartDate = storeKit.nextEntitlementPlanChange?.effectiveDate
     Task { await syncPlanToBackendIfPossible() }
   }
 
@@ -257,6 +283,15 @@ enum StoreKitServiceError: LocalizedError {
 /// StoreKit 2 service that backs subscription UI and state.
 @MainActor
 final class StoreKitService: ObservableObject {
+  #if DEBUG
+    static let debugIgnoreFounderKey = "lector_debug_ignore_founder_entitlement"
+
+    static var debugIgnoreFounderEntitlement: Bool {
+      get { UserDefaults.standard.bool(forKey: debugIgnoreFounderKey) }
+      set { UserDefaults.standard.set(newValue, forKey: debugIgnoreFounderKey) }
+    }
+  #endif
+
   struct ProductIDs: Equatable {
     let proMonthly: String
     let proYearly: String
@@ -269,8 +304,15 @@ final class StoreKitService: ObservableObject {
     let isAutoRenewable: Bool
   }
 
+  struct NextPlanChange: Equatable {
+    let nextPlan: SubscriptionPlan
+    let effectiveDate: Date?
+  }
+
   @Published private(set) var productsByPlan: [SubscriptionPlan: Product] = [:]
-  @Published private(set) var entitlement: Entitlement = .init(plan: .free, expirationDate: nil, isAutoRenewable: false)
+  @Published private(set) var entitlement: Entitlement = .init(
+    plan: .free, expirationDate: nil, isAutoRenewable: false)
+  @Published private(set) var nextEntitlementPlanChange: NextPlanChange?
 
   private let productIDs: ProductIDs?
 
@@ -302,6 +344,7 @@ final class StoreKitService: ObservableObject {
   func refreshEntitlements() async {
     let best = await Self.bestEntitlementFromCurrentEntitlements()
     entitlement = best ?? .init(plan: .free, expirationDate: nil, isAutoRenewable: false)
+    nextEntitlementPlanChange = await computeNextPlanChange(current: entitlement)
   }
 
   func restorePurchases() async throws {
@@ -320,7 +363,8 @@ final class StoreKitService: ObservableObject {
       // Try one lazy load before failing.
       try await loadProducts()
       guard let product = productsByPlan[plan] else {
-        throw StoreKitServiceError.productNotFound(plan.rawValue)
+        let expectedID = expectedProductID(for: plan) ?? plan.rawValue
+        throw StoreKitServiceError.productNotFound(expectedID)
       }
       return try await purchaseProduct(product, expectedPlan: plan)
     }
@@ -329,7 +373,10 @@ final class StoreKitService: ObservableObject {
   }
 
   func showManageSubscriptions() async throws {
-    guard let scene = UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene }) as? UIWindowScene else {
+    guard
+      let scene = UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene })
+        as? UIWindowScene
+    else {
       return
     }
     try await AppStore.showManageSubscriptions(in: scene)
@@ -337,7 +384,56 @@ final class StoreKitService: ObservableObject {
 
   // MARK: - Internals
 
-  private func purchaseProduct(_ product: Product, expectedPlan: SubscriptionPlan) async throws -> Entitlement {
+  private func computeNextPlanChange(current: Entitlement) async -> NextPlanChange? {
+    guard current.plan.isPro else { return nil }
+    guard let currentProduct = productsByPlan[current.plan] else { return nil }
+    guard let ids = Self.loadProductIDsFromInfoPlist() else { return nil }
+
+    do {
+      let statuses = try await currentProduct.subscription?.status ?? []
+      // Find the status entry corresponding to the currently active product.
+      let status = try statuses.first(where: { st in
+        let t = try Self.requireVerified(st.transaction)
+        return t.productID == currentProduct.id
+      })
+      guard let status else { return nil }
+
+      let renewal = try Self.requireVerified(status.renewalInfo)
+      guard let preferredID = renewal.autoRenewPreference else { return nil }
+      guard preferredID != currentProduct.id else { return nil }
+
+      let nextPlan: SubscriptionPlan? = {
+        if preferredID == ids.proMonthly { return .proMonthly }
+        if preferredID == ids.proYearly { return .proYearly }
+        return nil
+      }()
+      guard let nextPlan else { return nil }
+
+      // Scheduled plan changes start at the end of the current paid period.
+      let t = try Self.requireVerified(status.transaction)
+      return NextPlanChange(nextPlan: nextPlan, effectiveDate: t.expirationDate)
+    } catch {
+      return nil
+    }
+  }
+
+  private func expectedProductID(for plan: SubscriptionPlan) -> String? {
+    guard let productIDs else { return nil }
+    switch plan {
+    case .free:
+      return nil
+    case .proMonthly:
+      return productIDs.proMonthly
+    case .proYearly:
+      return productIDs.proYearly
+    case .founderLifetime:
+      return productIDs.founderLifetime
+    }
+  }
+
+  private func purchaseProduct(_ product: Product, expectedPlan: SubscriptionPlan) async throws
+    -> Entitlement
+  {
     let result = try await product.purchase()
     switch result {
     case .success(let verification):
@@ -345,7 +441,8 @@ final class StoreKitService: ObservableObject {
       await transaction.finish()
       await refreshEntitlements()
       return entitlement.plan == .free
-        ? Entitlement(plan: expectedPlan, expirationDate: nil, isAutoRenewable: product.type == .autoRenewable)
+        ? Entitlement(
+          plan: expectedPlan, expirationDate: nil, isAutoRenewable: product.type == .autoRenewable)
         : entitlement
     case .userCancelled:
       throw StoreKitServiceError.purchaseCancelled
@@ -359,12 +456,21 @@ final class StoreKitService: ObservableObject {
   private static func bestEntitlementFromCurrentEntitlements() async -> Entitlement? {
     var best: Entitlement?
 
+    #if DEBUG
+      let ignoreFounder = debugIgnoreFounderEntitlement
+    #endif
+
     for await result in Transaction.currentEntitlements {
       guard let transaction = try? requireVerified(result) else { continue }
 
       let plan: SubscriptionPlan = {
         if let ids = loadProductIDsFromInfoPlist() {
-          if transaction.productID == ids.founderLifetime { return .founderLifetime }
+          if transaction.productID == ids.founderLifetime {
+            #if DEBUG
+              if ignoreFounder { return .free }
+            #endif
+            return .founderLifetime
+          }
           if transaction.productID == ids.proYearly { return .proYearly }
           if transaction.productID == ids.proMonthly { return .proMonthly }
         }
@@ -429,6 +535,7 @@ final class StoreKitService: ObservableObject {
     else {
       return nil
     }
-    return ProductIDs(proMonthly: proMonthly, proYearly: proYearly, founderLifetime: founderLifetime)
+    return ProductIDs(
+      proMonthly: proMonthly, proYearly: proYearly, founderLifetime: founderLifetime)
   }
 }

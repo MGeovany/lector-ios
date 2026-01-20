@@ -19,6 +19,7 @@ struct ReaderView: View {
   @State private var selectedHighlightText: String = ""
   @State private var selectedHighlightPageNumber: Int? = nil
   @State private var selectedHighlightProgress: Double? = nil
+  @State private var clearTextSelectionToken: Int = 0
   @State private var searchQuery: String = ""
   @State private var showSearch: Bool = false
   @State private var isDismissing: Bool = false
@@ -48,6 +49,12 @@ struct ReaderView: View {
   @State private var lastLoggedOffsetY: CGFloat = -9999
   @State private var lastLoggedContentHeight: CGFloat = -9999
   @State private var lastLoggedViewportHeight: CGFloat = -9999
+
+  // Ensure status bar content (time/battery) stays readable even when the *reading surface*
+  // theme is dark but the app's global theme may be light.
+  private var readerStatusBarScheme: ColorScheme {
+    preferences.theme == .day ? .light : .dark
+  }
 
   init(
     book: Book,
@@ -137,6 +144,7 @@ struct ReaderView: View {
     }
     .toolbar(.hidden, for: .tabBar)
     .toolbar(.hidden, for: .navigationBar)
+    .preferredColorScheme(readerStatusBarScheme)
     .navigationBarBackButtonHidden(true)
     // While popping this view, proactively allow the tab bar to re-appear so it doesn't "pop in"
     // after the navigation transition finishes.
@@ -372,10 +380,12 @@ struct ReaderView: View {
                       lineSpacing: CGFloat(preferences.fontSize)
                         * CGFloat(max(0, preferences.lineSpacing - 1)),
                       highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
+                      clearSelectionToken: clearTextSelectionToken,
                       onShareSelection: { selected in
                         selectedHighlightText = selected
                         selectedHighlightPageNumber = idx + 1
                         selectedHighlightProgress = scrollProgress
+                        clearTextSelectionToken &+= 1
                         showHighlightEditor = true
                       }
                     )
@@ -394,10 +404,12 @@ struct ReaderView: View {
                   lineSpacing: CGFloat(preferences.fontSize)
                     * CGFloat(max(0, preferences.lineSpacing - 1)),
                   highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
+                  clearSelectionToken: clearTextSelectionToken,
                   onShareSelection: { selected in
                     selectedHighlightText = selected
                     selectedHighlightPageNumber = viewModel.currentIndex + 1
                     selectedHighlightProgress = nil
+                    clearTextSelectionToken &+= 1
                     showHighlightEditor = true
                   }
                 )

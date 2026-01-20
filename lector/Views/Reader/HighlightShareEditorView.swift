@@ -286,9 +286,20 @@ private struct HighlightShareCanvasView: View {
         theme.surfaceBackground
 
         let tuned = ShareTuning.make(quote: draft.quote, baseFontSize: fontSize)
-        // Keep a narrower, more "readable column" width (what you marked in red),
-        // but still large enough to keep the font from feeling tiny.
-        let cardWidth = min(geo.size.width * 0.70, 720)
+        // Keep a "readable column" width. For Instagram Story (wide format),
+        // we intentionally use a narrower column so the first line doesn't run too long.
+        let widthRatio: CGFloat = {
+          switch draft.format {
+          case .wide:
+            return 0.52
+          case .square:
+            return 0.74
+          }
+        }()
+        let maxCardWidth: CGFloat = (draft.format == .wide) ? 600 : 760
+        let cardWidth = min(geo.size.width * widthRatio, maxCardWidth)
+
+        let contentPaddingHorizontal: CGFloat = (draft.format == .wide) ? 26 : 20
 
         HighlightCardView(
           quote: draft.quote,
@@ -303,6 +314,7 @@ private struct HighlightShareCanvasView: View {
           metadataFontSize: tuned.metadataFontSize,
           maxQuoteLines: tuned.maxQuoteLines,
           maxWords: tuned.maxWords,
+          contentPaddingHorizontal: contentPaddingHorizontal,
           palette: .export(for: theme)
         )
         .frame(width: cardWidth)
@@ -397,6 +409,7 @@ private struct HighlightCardView: View {
   let metadataFontSize: CGFloat
   let maxQuoteLines: Int
   let maxWords: Int
+  let contentPaddingHorizontal: CGFloat
   let palette: HighlightCardPalette?
 
   // Match the reference card: longer quote with trailing ellipsis when it overflows.
@@ -440,6 +453,7 @@ private struct HighlightCardView: View {
     metadataFontSize: CGFloat = 13,
     maxQuoteLines: Int = 9,
     maxWords: Int = 170,
+    contentPaddingHorizontal: CGFloat = 20,
     palette: HighlightCardPalette? = nil
   ) {
     self.quote = quote
@@ -453,6 +467,7 @@ private struct HighlightCardView: View {
     self.metadataFontSize = metadataFontSize
     self.maxQuoteLines = maxQuoteLines
     self.maxWords = maxWords
+    self.contentPaddingHorizontal = contentPaddingHorizontal
     self.palette = palette
   }
 
@@ -526,7 +541,7 @@ private struct HighlightCardView: View {
       }
     }
     .padding(.vertical, 20)
-    .padding(.horizontal, 20)
+    .padding(.horizontal, contentPaddingHorizontal)
     .background(
       cardBackground,
       in: RoundedRectangle(cornerRadius: 16, style: .continuous)

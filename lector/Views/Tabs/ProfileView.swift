@@ -94,6 +94,15 @@ struct ProfileView: View {
             }
           }
 
+          if let next = nextPlanText {
+            HStack {
+              Text("Next")
+              Spacer()
+              Text(next)
+                .foregroundStyle(.secondary)
+            }
+          }
+
           Button {
             showPremiumSheet = true
           } label: {
@@ -453,6 +462,27 @@ struct ProfileView: View {
       return "Renews \(Self.shortDate(date))"
     }
     return "Active"
+  }
+
+  private var nextPlanText: String? {
+    guard
+      let nextPlan = subscription.nextPlan,
+      nextPlan != subscription.plan
+    else { return nil }
+
+    let title: String = {
+      switch nextPlan {
+      case .free: return "Free"
+      case .proMonthly: return "Pro (Monthly)"
+      case .proYearly: return "Pro (Yearly)"
+      case .founderLifetime: return "Founder (Lifetime)"
+      }
+    }()
+
+    if let date = subscription.nextPlanStartDate {
+      return "\(title) • Starts \(Self.shortDate(date))"
+    }
+    return title
   }
 
   private static func shortDate(_ date: Date) -> String {
