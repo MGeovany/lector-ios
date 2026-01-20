@@ -8,6 +8,7 @@ struct SelectableTextView: UIViewRepresentable {
   let textColor: UIColor
   let lineSpacing: CGFloat
   let highlightQuery: String?
+  let clearSelectionToken: Int
   let onShareSelection: (String) -> Void
 
   #if DEBUG
@@ -88,10 +89,22 @@ struct SelectableTextView: UIViewRepresentable {
     return v
   }
 
+  func makeCoordinator() -> Coordinator {
+    Coordinator()
+  }
+
   func updateUIView(_ uiView: ShareableSelectionTextView, context: Context) {
     uiView.onShareSelection = onShareSelection
     // Prefer the parent SwiftUI ScrollView for vertical pans.
     uiView.lectorPreferParentScrollViewForPans(debug: Self.debugScrollLogs)
+
+    // If a parent (e.g. ReaderView) asks to clear selection (usually when showing a modal),
+    // remove the highlight + caret.
+    if context.coordinator.lastClearSelectionToken != clearSelectionToken {
+      context.coordinator.lastClearSelectionToken = clearSelectionToken
+      uiView.selectedRange = NSRange(location: 0, length: 0)
+      uiView.resignFirstResponder()
+    }
 
     let paragraph = NSMutableParagraphStyle()
     paragraph.lineSpacing = lineSpacing
@@ -156,6 +169,10 @@ struct SelectableTextView: UIViewRepresentable {
       )
     }
   }
+}
+
+final class Coordinator {
+  var lastClearSelectionToken: Int = 0
 }
 
 // MARK: - Gesture coordination helpers

@@ -19,6 +19,7 @@ struct ReaderView: View {
   @State private var selectedHighlightText: String = ""
   @State private var selectedHighlightPageNumber: Int? = nil
   @State private var selectedHighlightProgress: Double? = nil
+  @State private var clearTextSelectionToken: Int = 0
   @State private var searchQuery: String = ""
   @State private var showSearch: Bool = false
   @State private var isDismissing: Bool = false
@@ -372,10 +373,12 @@ struct ReaderView: View {
                       lineSpacing: CGFloat(preferences.fontSize)
                         * CGFloat(max(0, preferences.lineSpacing - 1)),
                       highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
+                      clearSelectionToken: clearTextSelectionToken,
                       onShareSelection: { selected in
                         selectedHighlightText = selected
                         selectedHighlightPageNumber = idx + 1
                         selectedHighlightProgress = scrollProgress
+                        clearTextSelectionToken &+= 1
                         showHighlightEditor = true
                       }
                     )
@@ -394,10 +397,12 @@ struct ReaderView: View {
                   lineSpacing: CGFloat(preferences.fontSize)
                     * CGFloat(max(0, preferences.lineSpacing - 1)),
                   highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
+                  clearSelectionToken: clearTextSelectionToken,
                   onShareSelection: { selected in
                     selectedHighlightText = selected
                     selectedHighlightPageNumber = viewModel.currentIndex + 1
                     selectedHighlightProgress = nil
+                    clearTextSelectionToken &+= 1
                     showHighlightEditor = true
                   }
                 )
