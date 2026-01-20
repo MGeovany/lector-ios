@@ -8,6 +8,7 @@ struct PremiumUpsellSheetView: View {
   @State private var selectedPlan: SubscriptionPlan = .free
   @State private var showRestoreAlert: Bool = false
   @State private var restoreMessage: String?
+  @State private var showDowngradeInfo: Bool = false
 
   var body: some View {
     NavigationStack {
@@ -56,6 +57,16 @@ struct PremiumUpsellSheetView: View {
     } message: {
       Text(subscription.lastErrorMessage ?? "")
     }
+    .alert("Downgrade", isPresented: $showDowngradeInfo) {
+      Button("Manage subscription") {
+        Task {
+          await subscription.showManageSubscriptions()
+        }
+      }
+      Button("Not now", role: .cancel) {}
+    } message: {
+      Text(downgradeInfoText)
+    }
   }
 
   private var header: some View {
@@ -98,7 +109,11 @@ struct PremiumUpsellSheetView: View {
         ],
         badgeText: nil,
         isSelected: selectedPlan == .free,
-        onTap: { selectedPlan = .free }
+        onTap: {
+          // Founder is a lifetime one-time purchase (non-consumable), so "downgrading" doesn’t apply.
+          guard !subscription.isFounder else { return }
+          selectedPlan = .free
+        }
       )
 
       PlanCard(
@@ -137,6 +152,11 @@ struct PremiumUpsellSheetView: View {
   private var continueButton: some View {
     Button {
       Task {
+        // For auto-renewable subscriptions, downgrading happens in App Store (you keep access until period end).
+        if selectedPlan == .free, subscription.plan.isPro {
+          showDowngradeInfo = true
+          return
+        }
         await subscription.purchase(selectedPlan)
         if subscription.lastErrorMessage == nil {
           dismiss()
@@ -204,6 +224,33 @@ struct PremiumUpsellSheetView: View {
         Text(restoreMessage ?? subscription.lastErrorMessage ?? "Done.")
       }
 
+#if DEBUG
+      if debugCanResetFounderPurchase {
+        Button {
+          Task {
+            let newValue = !subscription.debugIsIgnoringFounderPurchase
+            await subscription.debugSetIgnoreFounderPurchase(newValue)
+            if subscription.lastErrorMessage == nil {
+              restoreMessage = newValue
+                ? "Founder purchase ignored (debug)."
+                : "Founder purchase re-enabled (debug)."
+              showRestoreAlert = true
+            }
+          }
+        } label: {
+          Text(
+            subscription.debugIsIgnoringFounderPurchase
+              ? "Re-enable Founder purchase (Debug)"
+              : "Ignore Founder purchase (Debug)"
+          )
+            .font(.parkinsans(size: 13, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.top, 10)
+        }
+        .buttonStyle(.plain)
+      }
+#endif
+
       Text("Recurring billing for Pro. Cancel anytime.")
         .font(.parkinsans(size: 12, weight: .regular))
         .foregroundStyle(.secondary)
@@ -224,6 +271,33 @@ struct PremiumUpsellSheetView: View {
   private var founderPriceText: String {
     subscription.priceText(for: .founderLifetime) ?? "$99 one‑time"
   }
+
+  private var downgradeInfoText: String {
+    if let date = subscription.expirationDate {
+      return
+        "You’ll keep Pro until \(Self.shortDate(date)). After that, your plan will revert to Free. To cancel renewal, manage your subscription in the App Store."
+    }
+    return
+      "You’ll keep Pro until the end of the current billing period. To cancel renewal, manage your subscription in the App Store."
+  }
+
+  private static func shortDate(_ date: Date) -> String {
+    let f = DateFormatter()
+    f.dateStyle = .medium
+    f.timeStyle = .none
+    return f.string(from: date)
+  }
+
+#if DEBUG
+  private var debugCanResetFounderPurchase: Bool {
+    let isSandboxReceipt = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+#if targetEnvironment(simulator)
+    return true
+#else
+    return isSandboxReceipt
+#endif
+  }
+#endif
 }
 
 private struct PlanCard: View {
