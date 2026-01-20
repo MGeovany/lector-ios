@@ -50,6 +50,12 @@ struct ReaderView: View {
   @State private var lastLoggedContentHeight: CGFloat = -9999
   @State private var lastLoggedViewportHeight: CGFloat = -9999
 
+  // Ensure status bar content (time/battery) stays readable even when the *reading surface*
+  // theme is dark but the app's global theme may be light.
+  private var readerStatusBarScheme: ColorScheme {
+    preferences.theme == .day ? .light : .dark
+  }
+
   init(
     book: Book,
     onProgressChange: ((Int, Int, Double?) -> Void)? = nil,
@@ -138,6 +144,7 @@ struct ReaderView: View {
     }
     .toolbar(.hidden, for: .tabBar)
     .toolbar(.hidden, for: .navigationBar)
+    .preferredColorScheme(readerStatusBarScheme)
     .navigationBarBackButtonHidden(true)
     // While popping this view, proactively allow the tab bar to re-appear so it doesn't "pop in"
     // after the navigation transition finishes.
