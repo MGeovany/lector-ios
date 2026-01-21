@@ -355,7 +355,7 @@ private struct PlanCard: View {
 
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
               .font(.system(size: 16, weight: .semibold))
-              .foregroundStyle(isSelected ? AppColors.matteBlack : Color(.separator))
+              .foregroundStyle(selectionIndicatorColor)
               .scaleEffect(isSelected ? 1.1 : 1.0)
               .symbolEffect(.bounce, value: isSelected)
           }
@@ -425,6 +425,14 @@ private struct PlanCard: View {
         : AppColors.matteBlack.opacity(0.2)
     } else {
       return Color.clear
+    }
+  }
+
+  private var selectionIndicatorColor: Color {
+    if isSelected {
+      return colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack
+    } else {
+      return colorScheme == .dark ? Color.white.opacity(0.22) : Color(.separator)
     }
   }
 }

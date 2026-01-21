@@ -10,6 +10,7 @@ struct ProfileHeaderRowView: View {
   let email: String
   var avatarURL: URL? = nil
   var badge: ProfilePlanBadge? = nil
+  @Environment(\.colorScheme) private var colorScheme
   @AppStorage(AppPreferenceKeys.profileAvatarHeadAssetName) private var headAssetName: String = ""
   @AppStorage(AppPreferenceKeys.profileAvatarFaceAssetName) private var faceAssetName: String = ""
 
@@ -70,6 +71,12 @@ struct ProfileHeaderRowView: View {
 
   @ViewBuilder
   private func badgeSquare(_ badge: ProfilePlanBadge) -> some View {
+    let badgeTextColor: Color = (colorScheme == .dark) ? .white : .black
+    // Keep the badge "on theme": in dark mode, use an *opaque* fill so the animated gradient
+    // doesn't bleed through the pill and reduce readability.
+    let badgeFill: Color = (colorScheme == .dark) ? Color(white: 0.14) : .white
+    let borderInset: CGFloat = (colorScheme == .dark) ? 3 : 2
+
     switch badge {
     case .pro:
       AnimatedBorderBadge(
@@ -79,8 +86,9 @@ struct ProfileHeaderRowView: View {
           Color(red: 0.22, green: 0.23, blue: 0.70),  // ~#393BB2
           Color(red: 0.89, green: 0.80, blue: 1.00),
         ],
-        textColor: .black,
-        innerFill: .white
+        textColor: badgeTextColor,
+        innerFill: badgeFill,
+        borderInset: borderInset
       )
       .accessibilityLabel("Pro plan")
 
@@ -92,8 +100,9 @@ struct ProfileHeaderRowView: View {
           Color(red: 1.00, green: 0.46, blue: 0.14),  // deep orange
           Color(red: 1.00, green: 0.86, blue: 0.62),
         ],
-        textColor: .black,
-        innerFill: .white
+        textColor: badgeTextColor,
+        innerFill: badgeFill,
+        borderInset: borderInset
       )
       .accessibilityLabel("Founder plan")
     }
@@ -105,6 +114,7 @@ private struct AnimatedBorderBadge: View {
   let colors: [Color]
   let textColor: Color
   let innerFill: Color
+  let borderInset: CGFloat
   private let cornerRadius: CGFloat = 100  // pill shape
 
   @State private var rotation: Double = 0
@@ -118,7 +128,7 @@ private struct AnimatedBorderBadge: View {
       .padding(.horizontal, 10)
       .padding(.vertical, 4)
       .background(innerFill, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-      .padding(2)
+      .padding(borderInset)
       .background(
         AngularGradient(
           gradient: Gradient(colors: colors),
