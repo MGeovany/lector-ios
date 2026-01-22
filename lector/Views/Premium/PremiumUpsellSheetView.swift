@@ -251,7 +251,18 @@ struct PremiumUpsellSheetView: View {
       }
 #endif
 
-      Text("Recurring billing for Pro. Cancel anytime.")
+      HStack(spacing: 14) {
+        Link("Privacy Policy", destination: WebAppLinks.privacyPolicy)
+        Link("Terms of Use (EULA)", destination: WebAppLinks.appleStandardEULA)
+      }
+      .font(.parkinsans(size: 12, weight: .semibold))
+      .padding(.top, 14)
+      .padding(.bottom, 8)
+      .tint(.secondary)
+
+      Text(
+        "Pro is an auto-renewing subscription. It renews unless cancelled at least 24 hours before the end of the current period. Manage or cancel in your App Store account settings."
+      )
         .font(.parkinsans(size: 12, weight: .regular))
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)

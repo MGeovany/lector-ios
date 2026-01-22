@@ -8,5 +8,7 @@
 	<string>lector.pro.monthly</string>
 	<key>PRO_YEARLY_PRODUCT_ID</key>
 	<string>lector.pro.yearly</string>
+	<key>WEB_APP_BASE_URL</key>
+	<string>https://lector.thefndrs.com</string>
 </dict>
 </plist>

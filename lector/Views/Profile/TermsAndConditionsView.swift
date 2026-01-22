@@ -12,6 +12,15 @@ struct TermsAndConditionsView: View {
         )
         .foregroundStyle(.secondary)
 
+        VStack(alignment: .leading, spacing: 6) {
+          Link("Privacy Policy", destination: WebAppLinks.privacyPolicy)
+          Link("Terms of Service", destination: WebAppLinks.termsOfService)
+          Link("Terms of Use (Apple EULA)", destination: WebAppLinks.appleStandardEULA)
+        }
+        .font(.parkinsansSemibold(size: CGFloat(13)))
+        .tint(.secondary)
+        .padding(.top, 6)
+
         sectionTitle("Storage")
         Text(
           "Free and Premium plans have different storage limits. If you exceed your plan’s limit, you may need to delete files or upgrade."

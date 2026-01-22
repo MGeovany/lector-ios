@@ -186,6 +186,27 @@ struct ProfileView: View {
         }
 
         Section("Legal") {
+          Button {
+            openURL(WebAppLinks.privacyPolicy)
+          } label: {
+            SettingsRowView(icon: "hand.raised", title: "Privacy Policy")
+          }
+          .buttonStyle(.plain)
+
+          Button {
+            openURL(WebAppLinks.appleStandardEULA)
+          } label: {
+            SettingsRowView(icon: "doc.plaintext", title: "Terms of Use (EULA)")
+          }
+          .buttonStyle(.plain)
+
+          Button {
+            openURL(WebAppLinks.termsOfService)
+          } label: {
+            SettingsRowView(icon: "doc.text", title: "Terms of Service")
+          }
+          .buttonStyle(.plain)
+
           NavigationLink {
             TermsAndConditionsView()
           } label: {

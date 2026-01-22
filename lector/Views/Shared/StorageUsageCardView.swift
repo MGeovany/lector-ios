@@ -126,11 +126,14 @@ private struct GoPremiumRingButton: View {
         Text("Go Premium")
           .font(.parkinsans(size: CGFloat(11), weight: .heavy))
       }
-      .foregroundStyle(AppColors.matteBlack)
+      .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
-      // White inner pill; ring provides the only “effect”.
-      .background(Color.white, in: Capsule(style: .continuous))
+      // Match the app theme: dark pill on dark mode, white on light.
+      .background(
+        (colorScheme == .dark ? Color.black : Color.white),
+        in: Capsule(style: .continuous)
+      )
     }
     // Avoid the default pressed/disabled-looking highlight.
     .buttonStyle(GoPremiumRingButtonStyle())
