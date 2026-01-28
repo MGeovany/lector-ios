@@ -141,15 +141,15 @@ struct ReaderSettingsPanelView: View {
 
           HStack(alignment: .top, spacing: gap) {
             VStack(spacing: gap) {
-              debugBox("Text")
+              textTile
                 .frame(height: textH)
 
               HStack(spacing: gap) {
-                debugBox("Offline")
+                offlineTile
                   .frame(maxWidth: .infinity)
                   .frame(height: bottomH)
 
-                debugBox("Lock")
+                lockTile
                   .frame(maxWidth: .infinity)
                   .frame(height: bottomH)
               }
@@ -487,6 +487,161 @@ struct ReaderSettingsPanelView: View {
       .buttonStyle(.plain)
       .disabled(!isEnabled)
       .opacity(isEnabled ? 1.0 : 0.85)
+    }
+  }
+
+  /*
+  * Text Size Tile
+  */
+  private var textTile: some View {
+    TextCustomizeTile(
+      title: "Text",
+      subtitle: "Customize",
+      footer: "Advanced",
+      systemImage: "textformat.size",
+      surfaceText: preferences.theme.surfaceText,
+      secondaryText: preferences.theme.surfaceSecondaryText,
+      onTap: {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+          screen = .textCustomize
+        }
+      }
+    )
+  }
+
+  private struct TextCustomizeTile: View {
+    let title: String
+    let subtitle: String
+    let footer: String
+    let systemImage: String
+    let surfaceText: Color
+    let secondaryText: Color
+    let onTap: () -> Void
+
+    var body: some View {
+      Button(action: onTap) {
+        VStack(spacing: 10) {
+          VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: systemImage)
+              .font(.system(size: 18, weight: .semibold))
+              .foregroundStyle(surfaceText.opacity(0.75))
+
+            Spacer(minLength: 0)
+
+            Text(title)
+              .font(.system(size: 20, weight: .bold))
+              .foregroundStyle(surfaceText.opacity(0.92))
+
+            Text(subtitle)
+              .font(.system(size: 12, weight: .semibold))
+              .foregroundStyle(secondaryText.opacity(0.70))
+          }
+          .padding(16)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+              .fill(surfaceText.opacity(0.04))
+          )
+          .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+              .stroke(surfaceText.opacity(0.08), lineWidth: 1)
+          )
+
+          Text(footer)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(secondaryText.opacity(0.35))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
+      .buttonStyle(.plain)
+    }
+  }
+
+  /*
+  * Offline Tile
+  */
+  private var offlineTile: some View {
+    RoundToggleTile(
+      title: "Offline",
+      systemImage: "wifi.slash",
+      isSelected: false,
+      surfaceText: preferences.theme.surfaceText,
+      secondaryText: preferences.theme.surfaceSecondaryText,
+      isEnabled: false,
+      action: {}
+    )
+  }
+
+  /*
+  * Lock Tile
+  */
+  private var lockTile: some View {
+    RoundToggleTile(
+      title: "Lock",
+      systemImage: isLocked ? "lock.fill" : "lock.open",
+      isSelected: isLocked,
+      surfaceText: preferences.theme.surfaceText,
+      secondaryText: preferences.theme.surfaceSecondaryText,
+      isEnabled: true,
+      action: {
+        isLocked.toggle()
+        if isLocked {
+          withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            isPresented = false
+          }
+        }
+      }
+    )
+  }
+
+  private struct RoundToggleTile: View {
+    let title: String
+    let systemImage: String
+    let isSelected: Bool
+    let surfaceText: Color
+    let secondaryText: Color
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+      Button(action: action) {
+        VStack(spacing: 10) {
+          ZStack {
+            Circle()
+              .fill(backgroundFill)
+              .frame(width: 56, height: 56)
+              .overlay(
+                Circle().stroke(borderStroke, lineWidth: 1)
+              )
+
+            Image(systemName: systemImage)
+              .font(.system(size: 18, weight: .semibold))
+              .foregroundStyle(surfaceText.opacity(isEnabled ? 0.85 : 0.35))
+          }
+
+          Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(secondaryText.opacity(isEnabled ? 0.55 : 0.35))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
+      .buttonStyle(.plain)
+      .disabled(!isEnabled)
+      .opacity(isEnabled ? 1.0 : 0.85)
+    }
+
+    private var backgroundFill: Color {
+      if isSelected {
+        return surfaceText.opacity(0.10)
+      }
+      return surfaceText.opacity(0.06)
+    }
+
+    private var borderStroke: Color {
+      if isSelected {
+        return surfaceText.opacity(0.22)
+      }
+      return surfaceText.opacity(0.10)
     }
   }
 
