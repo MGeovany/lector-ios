@@ -78,11 +78,13 @@ struct ReaderContentScrollView: View {
               .padding(.top, 14)
 
             if showSearch {
-              ReaderSearchBarView(query: $searchQuery)
-                .padding(.horizontal, horizontalPadding)
-                .padding(.top, 12)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchQuery.isEmpty)
+              ReaderSearchBarView(query: $searchQuery) {
+                showSearch = false
+              }
+              .padding(.horizontal, horizontalPadding)
+              .padding(.top, 12)
+              .transition(.move(edge: .top).combined(with: .opacity))
+              .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchQuery.isEmpty)
             }
 
             if viewModel.isLoading {
@@ -101,7 +103,10 @@ struct ReaderContentScrollView: View {
           .background(
             GeometryReader { geo in
               Color.clear
-                .preference(key: ReaderScrollOffsetKey.self, value: geo.frame(in: .named(scrollSpaceName)).minY)
+                .preference(
+                  key: ReaderScrollOffsetKey.self,
+                  value: geo.frame(in: .named(scrollSpaceName)).minY
+                )
                 .preference(key: ReaderScrollContentHeightKey.self, value: geo.size.height)
             }
           )

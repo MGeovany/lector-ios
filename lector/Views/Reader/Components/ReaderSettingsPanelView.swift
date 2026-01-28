@@ -157,7 +157,7 @@ struct ReaderSettingsPanelView: View {
             .frame(width: textColW)
 
             VStack(spacing: gap) {
-              debugBox("Search")
+              searchTile
                 .frame(height: searchH)
 
               debugBox("Text Size")
@@ -172,7 +172,7 @@ struct ReaderSettingsPanelView: View {
           voiceTile
             .frame(height: themeH)
 
-          debugBox("Transitions")
+          askAiTile
             .frame(height: searchH)
 
           debugBox("Brightness")
@@ -384,6 +384,77 @@ struct ReaderSettingsPanelView: View {
   }
 
   private struct VoiceTile: View {
+    let title: String
+    let systemImage: String
+    let surfaceText: Color
+    let secondaryText: Color
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+      Button(action: action) {
+        VStack(spacing: 10) {
+          ZStack {
+            Circle()
+              .fill(surfaceText.opacity(0.06))
+              .frame(width: 56, height: 56)
+              .overlay(
+                Circle().stroke(surfaceText.opacity(0.10), lineWidth: 1)
+              )
+
+            Image(systemName: systemImage)
+              .font(.system(size: 18, weight: .semibold))
+              .foregroundStyle(surfaceText.opacity(isEnabled ? 0.85 : 0.35))
+          }
+
+          Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(secondaryText.opacity(isEnabled ? 0.55 : 0.35))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
+      .buttonStyle(.plain)
+      .disabled(!isEnabled)
+      .opacity(isEnabled ? 1.0 : 0.85)
+    }
+  }
+
+  /*
+  * Search Tile
+  */
+  private var searchTile: some View {
+    RoundIconTile(
+      title: "Search",
+      systemImage: "magnifyingglass",
+      surfaceText: preferences.theme.surfaceText,
+      secondaryText: preferences.theme.surfaceSecondaryText,
+      isEnabled: true,
+      action: {
+        searchVisible = true
+        if searchQuery.isEmpty { searchQuery = "" }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+          isPresented = false
+        }
+      }
+    )
+  }
+
+  /*
+  * Ask AI Tile
+  */
+
+  private var askAiTile: some View {
+    RoundIconTile(
+      title: "Ask AI",
+      systemImage: "sparkles",
+      surfaceText: preferences.theme.surfaceText,
+      secondaryText: preferences.theme.surfaceSecondaryText,
+      isEnabled: false,
+      action: {}
+    )
+  }
+
+  private struct RoundIconTile: View {
     let title: String
     let systemImage: String
     let surfaceText: Color

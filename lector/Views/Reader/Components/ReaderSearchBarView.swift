@@ -3,6 +3,7 @@ import SwiftUI
 struct ReaderSearchBarView: View {
   @EnvironmentObject private var preferences: PreferencesViewModel
   @Binding var query: String
+  var onDismiss: (() -> Void)? = nil
 
   var body: some View {
     HStack(spacing: 10) {
@@ -13,18 +14,17 @@ struct ReaderSearchBarView: View {
         .textInputAutocapitalization(.never)
         .disableAutocorrection(true)
         .foregroundStyle(preferences.theme.surfaceText)
-      if !query.isEmpty {
-        Button {
-          withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            query = ""
-          }
-        } label: {
-          Image(systemName: "xmark.circle.fill")
-            .foregroundStyle(preferences.theme.surfaceSecondaryText)
-            .transition(.scale.combined(with: .opacity))
+      Button {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+          query = ""
+          onDismiss?()
         }
-        .buttonStyle(.plain)
+      } label: {
+        Image(systemName: "xmark.circle.fill")
+          .foregroundStyle(preferences.theme.surfaceSecondaryText)
+          .transition(.scale.combined(with: .opacity))
       }
+      .buttonStyle(.plain)
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 10)
