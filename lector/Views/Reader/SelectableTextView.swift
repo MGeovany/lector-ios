@@ -7,6 +7,7 @@ struct SelectableTextView: UIViewRepresentable {
   let font: UIFont
   let textColor: UIColor
   let lineSpacing: CGFloat
+  let textAlignment: NSTextAlignment
   let highlightQuery: String?
   let clearSelectionToken: Int
   let onShareSelection: (String) -> Void
@@ -36,6 +37,7 @@ struct SelectableTextView: UIViewRepresentable {
       // If text isn't set yet, create it temporarily for measurement
       let paragraph = NSMutableParagraphStyle()
       paragraph.lineSpacing = lineSpacing
+      paragraph.alignment = textAlignment
       paragraph.lineBreakMode = .byWordWrapping
       let attr = NSMutableAttributedString(
         string: text,
@@ -108,6 +110,7 @@ struct SelectableTextView: UIViewRepresentable {
 
     let paragraph = NSMutableParagraphStyle()
     paragraph.lineSpacing = lineSpacing
+    paragraph.alignment = textAlignment
     paragraph.lineBreakMode = .byWordWrapping
 
     let attr = NSMutableAttributedString(

@@ -107,5 +107,6 @@ enum PreferencesKeys {
   static let readingFont = "preferences.readingFont"
   static let readingFontSize = "preferences.readingFontSize"
   static let readingLineSpacing = "preferences.readingLineSpacing"
+  static let readingTextAlignment = "preferences.readingTextAlignment"
   static let continuousScrollForShortDocs = "preferences.continuousScrollForShortDocs"
 }

@@ -8,6 +8,7 @@ struct ReadingPreferencesSnapshot: Equatable {
     var font: ReadingFont
     var fontSize: Double
     var lineSpacing: Double
+    var textAlignment: ReadingTextAlignment
     var continuousScrollForShortDocs: Bool
 }
 
@@ -32,6 +33,9 @@ struct UserDefaultsReadingPreferencesStore: ReadingPreferencesStoring {
 
         let fontSize = defaults.object(forKey: PreferencesKeys.readingFontSize) as? Double ?? ReadingPreferencesDefaults.fontSize
         let lineSpacing = defaults.object(forKey: PreferencesKeys.readingLineSpacing) as? Double ?? ReadingPreferencesDefaults.lineSpacing
+        let alignmentRaw =
+            defaults.string(forKey: PreferencesKeys.readingTextAlignment) ?? ReadingPreferencesDefaults.textAlignment.rawValue
+        let textAlignment = ReadingTextAlignment(rawValue: alignmentRaw) ?? ReadingPreferencesDefaults.textAlignment
         let continuousScrollForShortDocs =
             defaults.object(forKey: PreferencesKeys.continuousScrollForShortDocs) as? Bool
             ?? ReadingPreferencesDefaults.continuousScrollForShortDocs
@@ -41,6 +45,7 @@ struct UserDefaultsReadingPreferencesStore: ReadingPreferencesStoring {
             font: font,
             fontSize: fontSize,
             lineSpacing: lineSpacing,
+            textAlignment: textAlignment,
             continuousScrollForShortDocs: continuousScrollForShortDocs
         )
     }
@@ -50,6 +55,7 @@ struct UserDefaultsReadingPreferencesStore: ReadingPreferencesStoring {
         defaults.set(snapshot.font.rawValue, forKey: PreferencesKeys.readingFont)
         defaults.set(snapshot.fontSize, forKey: PreferencesKeys.readingFontSize)
         defaults.set(snapshot.lineSpacing, forKey: PreferencesKeys.readingLineSpacing)
+        defaults.set(snapshot.textAlignment.rawValue, forKey: PreferencesKeys.readingTextAlignment)
         defaults.set(snapshot.continuousScrollForShortDocs, forKey: PreferencesKeys.continuousScrollForShortDocs)
     }
 }
@@ -62,6 +68,7 @@ final class PreferencesViewModel: ObservableObject {
     @Published var font: ReadingFont
     @Published var fontSize: Double
     @Published var lineSpacing: Double
+    @Published var textAlignment: ReadingTextAlignment
     @Published var continuousScrollForShortDocs: Bool
 
     private let store: ReadingPreferencesStoring
@@ -79,6 +86,7 @@ final class PreferencesViewModel: ObservableObject {
         self.font = snapshot.font
         self.fontSize = snapshot.fontSize
         self.lineSpacing = snapshot.lineSpacing
+        self.textAlignment = snapshot.textAlignment
         self.continuousScrollForShortDocs = snapshot.continuousScrollForShortDocs
 
         self.saved = snapshot
@@ -98,6 +106,7 @@ final class PreferencesViewModel: ObservableObject {
         font = ReadingPreferencesDefaults.font
         fontSize = ReadingPreferencesDefaults.fontSize
         lineSpacing = ReadingPreferencesDefaults.lineSpacing
+        textAlignment = ReadingPreferencesDefaults.textAlignment
         continuousScrollForShortDocs = ReadingPreferencesDefaults.continuousScrollForShortDocs
         save()
     }
@@ -108,6 +117,7 @@ final class PreferencesViewModel: ObservableObject {
             font: font,
             fontSize: fontSize,
             lineSpacing: lineSpacing,
+            textAlignment: textAlignment,
             continuousScrollForShortDocs: continuousScrollForShortDocs
         )
     }

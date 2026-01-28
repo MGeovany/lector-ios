@@ -79,12 +79,21 @@ enum ReadingTheme: String, CaseIterable, Identifiable {
   }
 }
 
+enum ReadingTextAlignment: String, CaseIterable, Identifiable {
+  case `default`
+  case justify
+
+  var id: String { rawValue }
+}
+
 enum ReadingFont: String, CaseIterable, Identifiable {
   case system
   case georgia
   case palatino
   case avenir
   case menlo
+  case iowan
+  case baskerville
 
   var id: String { rawValue }
 
@@ -95,6 +104,8 @@ enum ReadingFont: String, CaseIterable, Identifiable {
     case .palatino: return "Palatino"
     case .avenir: return "Avenir"
     case .menlo: return "Menlo"
+    case .iowan: return "Iowan"
+    case .baskerville: return "Baskerville"
     }
   }
 
@@ -105,6 +116,8 @@ enum ReadingFont: String, CaseIterable, Identifiable {
     case .palatino: return "Bookish"
     case .avenir: return "Modern"
     case .menlo: return "Mono"
+    case .iowan: return "Classic"
+    case .baskerville: return "Elegant"
     }
   }
 
@@ -120,6 +133,10 @@ enum ReadingFont: String, CaseIterable, Identifiable {
       return .custom("Avenir Next", size: size)
     case .menlo:
       return .custom("Menlo", size: size)
+    case .iowan:
+      return .custom("Iowan Old Style", size: size)
+    case .baskerville:
+      return .custom("Baskerville", size: size)
     }
   }
 
@@ -137,6 +154,11 @@ enum ReadingFont: String, CaseIterable, Identifiable {
     case .menlo:
       return UIFont(name: "Menlo-Regular", size: size)
         ?? UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    case .iowan:
+      // iOS ships Iowan as "IowanOldStyle-Roman" (fallback to system if missing)
+      return UIFont(name: "IowanOldStyle-Roman", size: size) ?? UIFont.systemFont(ofSize: size)
+    case .baskerville:
+      return UIFont(name: "Baskerville", size: size) ?? UIFont.systemFont(ofSize: size)
     }
   }
 }
@@ -146,5 +168,6 @@ struct ReadingPreferencesDefaults {
   static let font: ReadingFont = .system
   static let fontSize: Double = 17
   static let lineSpacing: Double = 1.12
+  static let textAlignment: ReadingTextAlignment = .default
   static let continuousScrollForShortDocs: Bool = false
 }
