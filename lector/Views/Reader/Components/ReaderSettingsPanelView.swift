@@ -136,7 +136,7 @@ struct ReaderSettingsPanelView: View {
 
       HStack(alignment: .top, spacing: gap) {
         VStack(spacing: gap) {
-          debugBox("Theme")
+          themePill
             .frame(height: themeH)
 
           HStack(alignment: .top, spacing: gap) {
@@ -228,4 +228,145 @@ struct ReaderSettingsPanelView: View {
       .padding(.top, 6)
     }
   }
+
+  /*
+  * Theme Pill
+  */
+  private var themePill: some View {
+    ThemePill(
+      selected: Binding(
+        get: { preferences.theme },
+        set: { newTheme in
+          withAnimation(.spring(response: 0.30, dampingFraction: 0.80)) {
+            preferences.theme = newTheme
+          }
+        }), surfaceText: preferences.theme.surfaceText,
+      secondaryText: preferences.theme.surfaceSecondaryText,
+      onEdit: {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { screen = .textCustomize }
+      })
+  }
+  private struct ThemePill: View {
+    @Binding var selected: ReadingTheme
+
+    let surfaceText: Color
+    let secondaryText: Color
+    let onEdit: () -> Void
+
+    private let pillH: CGFloat = 54
+    private let chipSize: CGFloat = 44
+    private let dotSize: CGFloat = 16
+    private let sidePadding: CGFloat = 14
+
+    var body: some View {
+      VStack(spacing: 8) {
+        ZStack {
+          RoundedRectangle(cornerRadius: 999, style: .continuous)
+            .fill(surfaceText.opacity(0.06))
+
+          GeometryReader { geo in
+            let w = geo.size.width
+            let leftX = sidePadding + chipSize / 2
+            let rightX = w - sidePadding - chipSize / 2
+            let midX = w / 2
+            let chipX: CGFloat = {
+              switch selected {
+              case .day: return leftX
+              case .amber: return midX
+              case .night: return rightX
+              }
+            }()
+
+            ZStack {
+              HStack {
+                dotButton(theme: .day)
+                Spacer(minLength: 0)
+                dotButton(theme: .amber)
+                Spacer(minLength: 0)
+                dotButton(theme: .night)
+              }
+              .padding(.horizontal, sidePadding)
+
+              chip(theme: selected)
+                .position(x: chipX, y: pillH / 2)
+                .animation(.spring(response: 0.30, dampingFraction: 0.80), value: selected)
+            }
+          }
+        }
+        .frame(height: pillH)
+
+        Text("Theme")
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundStyle(secondaryText.opacity(0.40))
+      }
+    }
+
+    private func chip(theme: ReadingTheme) -> some View {
+      ZStack {
+        Circle()
+          .fill(themeColor(theme).opacity(0.88))
+          .frame(width: 90, height: chipSize)
+          .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 6)
+
+        Circle()
+          .fill(themeColor(theme))
+          .frame(width: dotSize, height: dotSize)
+          .overlay(
+            Circle().stroke(
+              theme == .night ? Color.white.opacity(0.10) : Color.black.opacity(0.10),
+              lineWidth: 1,
+              antialiased: true
+            )
+          )
+      }
+      .contentShape(Circle())
+      .onTapGesture {
+        cycleTheme()
+      }
+    }
+
+    private func dotButton(theme: ReadingTheme) -> some View {
+      Button {
+        withAnimation(.spring(response: 0.30, dampingFraction: 0.80)) {
+          selected = theme
+        }
+      } label: {
+        Circle()
+          .fill(themeColor(theme))
+          .frame(width: dotSize, height: dotSize)
+          .overlay(
+            Circle().stroke(Color.black.opacity(0.10), lineWidth: 1)
+          )
+          .opacity(selected == theme ? 1.0 : 0.85)
+          .frame(width: chipSize, height: chipSize)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+    }
+
+    private func themeColor(_ theme: ReadingTheme) -> Color {
+      switch theme {
+      case .day:
+        return Color.white
+      case .amber:
+        return Color(red: 0.98, green: 0.93, blue: 0.74)
+      case .night:
+        return Color(red: 0.06, green: 0.06, blue: 0.08)
+      }
+    }
+
+    private func cycleTheme() {
+      let next: ReadingTheme = {
+        switch selected {
+        case .day: return .amber
+        case .amber: return .night
+        case .night: return .day
+        }
+      }()
+      withAnimation(.spring(response: 0.30, dampingFraction: 0.80)) {
+        selected = next
+      }
+    }
+  }
+
 }
