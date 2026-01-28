@@ -37,7 +37,7 @@ struct ReaderSettingsPanelView: View {
           }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: containerHeight * 0.55)
+        .frame(height: containerHeight * 0.60)
         .background(
           preferences.theme == .day
             ? Color(
@@ -116,11 +116,11 @@ struct ReaderSettingsPanelView: View {
   }
 
   private var mainSettings: some View {
-    let gap: CGFloat = 16
+    let gap: CGFloat = 15
 
     let themeH: CGFloat = 80
     let searchH: CGFloat = 80
-    let tallH: CGFloat = 140
+    let tallH: CGFloat = 180
     let bottomH: CGFloat = 80
     let textH: CGFloat = searchH + tallH - bottomH
 
@@ -131,7 +131,7 @@ struct ReaderSettingsPanelView: View {
       let leftW = (totalW - gap) * 0.80
       let rightW = (totalW - gap) * 0.20
 
-      let searchColW = rightW
+      let searchColW = leftW * 0.35
       let textColW = leftW - gap - searchColW
 
       HStack(alignment: .top, spacing: gap) {
@@ -160,7 +160,7 @@ struct ReaderSettingsPanelView: View {
               searchTile
                 .frame(height: searchH)
 
-              debugBox("Text Size")
+              textSizePill
                 .frame(height: tallH)
             }
             .frame(width: searchColW)
@@ -175,7 +175,7 @@ struct ReaderSettingsPanelView: View {
           askAiTile
             .frame(height: searchH)
 
-          debugBox("Brightness")
+          brightnessPill
             .frame(height: tallH)
         }
         .frame(width: rightW)
@@ -398,9 +398,6 @@ struct ReaderSettingsPanelView: View {
             Circle()
               .fill(surfaceText.opacity(0.06))
               .frame(width: 56, height: 56)
-              .overlay(
-                Circle().stroke(surfaceText.opacity(0.10), lineWidth: 1)
-              )
 
             Image(systemName: systemImage)
               .font(.system(size: 18, weight: .semibold))
@@ -409,7 +406,7 @@ struct ReaderSettingsPanelView: View {
 
           Text(title)
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(secondaryText.opacity(isEnabled ? 0.55 : 0.35))
+            .foregroundStyle(secondaryText.opacity(isEnabled ? 0.40 : 0.35))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
@@ -469,9 +466,6 @@ struct ReaderSettingsPanelView: View {
             Circle()
               .fill(surfaceText.opacity(0.06))
               .frame(width: 56, height: 56)
-              .overlay(
-                Circle().stroke(surfaceText.opacity(0.10), lineWidth: 1)
-              )
 
             Image(systemName: systemImage)
               .font(.system(size: 18, weight: .semibold))
@@ -480,7 +474,7 @@ struct ReaderSettingsPanelView: View {
 
           Text(title)
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(secondaryText.opacity(isEnabled ? 0.55 : 0.35))
+            .foregroundStyle(secondaryText.opacity(isEnabled ? 0.40 : 0.35))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
@@ -540,11 +534,7 @@ struct ReaderSettingsPanelView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
           .background(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
-              .fill(surfaceText.opacity(0.04))
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-              .stroke(surfaceText.opacity(0.08), lineWidth: 1)
+              .fill(surfaceText.opacity(0.06))
           )
 
           Text(footer)
@@ -610,9 +600,6 @@ struct ReaderSettingsPanelView: View {
             Circle()
               .fill(backgroundFill)
               .frame(width: 56, height: 56)
-              .overlay(
-                Circle().stroke(borderStroke, lineWidth: 1)
-              )
 
             Image(systemName: systemImage)
               .font(.system(size: 18, weight: .semibold))
@@ -621,7 +608,7 @@ struct ReaderSettingsPanelView: View {
 
           Text(title)
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(secondaryText.opacity(isEnabled ? 0.55 : 0.35))
+            .foregroundStyle(secondaryText.opacity(isSelected ? 0.40 : 0.35))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
@@ -631,17 +618,163 @@ struct ReaderSettingsPanelView: View {
     }
 
     private var backgroundFill: Color {
-      if isSelected {
-        return surfaceText.opacity(0.10)
+      surfaceText.opacity(0.06)
+    }
+  }
+
+  /*
+  * Text Size Slider
+  */
+  private var textSizePill: some View {
+    VerticalPillSlider(
+      title: "Text Size",
+      systemImage: "textformat.size",
+      value: Binding(
+        get: { preferences.fontSize },
+        set: { preferences.fontSize = min(26, max(14, $0)) }
+      ),
+      range: 14...26,
+      surfaceText: preferences.theme.surfaceText,
+      secondaryText: preferences.theme.surfaceSecondaryText,
+      isEnabled: true,
+      step: 0.25
+    )
+  }
+
+  /*
+  * Brightness Slider
+  */
+  private var brightnessPill: some View {
+    VerticalPillSlider(
+      title: "Brightness",
+      systemImage: "sun.max",
+      value: Binding(
+        get: { Double(UIScreen.main.brightness) },
+        set: { UIScreen.main.brightness = min(1, max(0, CGFloat($0))) }
+      ),
+      range: 0...1,
+      surfaceText: preferences.theme.surfaceText,
+      secondaryText: preferences.theme.surfaceSecondaryText,
+      isEnabled: true,
+      step: 0.01
+    )
+  }
+
+  private struct VerticalPillSlider: View {
+    let title: String
+    let systemImage: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let surfaceText: Color
+    let secondaryText: Color
+    let isEnabled: Bool
+    let step: Double
+
+    private let pillCorner: CGFloat = 999
+    private let labelGap: CGFloat = 10
+    private let pillW: CGFloat = 55
+
+    private let iconInsetTop: CGFloat = 18
+    private let iconSize: CGFloat = 18
+
+    @State private var isDragging: Bool = false
+
+    var body: some View {
+      let lo = min(range.lowerBound, range.upperBound)
+      let hi = max(range.lowerBound, range.upperBound)
+
+      VStack(spacing: labelGap) {
+        GeometryReader { geo in
+          let h = geo.size.height
+
+          let t = normalized(lo: lo, hi: hi)  // 0...1
+          let fillH = CGFloat(t) * h
+
+          ZStack {
+            RoundedRectangle(cornerRadius: pillCorner, style: .continuous)
+              .fill(surfaceText.opacity(isEnabled ? 0.06 : 0.04))
+
+            Rectangle()
+              .fill(surfaceText.opacity(isEnabled ? 0.12 : 0.07))
+              .frame(height: fillH)
+              .frame(maxHeight: .infinity, alignment: .bottom)
+              .mask(RoundedRectangle(cornerRadius: pillCorner, style: .continuous))
+              .animation(
+                isDragging ? nil : .spring(response: 0.22, dampingFraction: 0.95),
+                value: value
+              )
+
+            VStack(spacing: 0) {
+              Spacer(minLength: 0)
+              Image(systemName: systemImage)
+                .font(.system(size: iconSize, weight: .semibold))
+                .foregroundStyle(surfaceText.opacity(isEnabled ? 0.80 : 0.35))
+                .padding(.bottom, 20)
+
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+          }
+          .frame(width: pillW)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+          .clipShape(RoundedRectangle(cornerRadius: pillCorner, style: .continuous))
+          .contentShape(RoundedRectangle(cornerRadius: pillCorner, style: .continuous))
+          .gesture(
+            DragGesture(minimumDistance: 0)
+              .onChanged { g in
+                guard isEnabled else { return }
+                isDragging = true
+
+                let localY = min(max(0, g.location.y), h)
+                let progress = 1.0 - Double(localY / h)  // 0...1 (top=1)
+
+                let raw = lo + progress * (hi - lo)
+                value = snapped(raw, lo: lo, hi: hi)
+              }
+              .onEnded { _ in
+                isDragging = false
+              }
+          )
+          .accessibilityLabel(Text(title))
+          .accessibilityValue(Text(accessibilityValue(lo: lo, hi: hi)))
+          .accessibilityAdjustableAction { direction in
+            guard isEnabled else { return }
+            switch direction {
+            case .increment:
+              value = min(hi, value + step)
+            case .decrement:
+              value = max(lo, value - step)
+            @unknown default:
+              break
+            }
+          }
+        }
+
+        Text(title)
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundStyle(secondaryText.opacity(isEnabled ? 0.40 : 0.35))
       }
-      return surfaceText.opacity(0.06)
+      .opacity(isEnabled ? 1.0 : 0.85)
     }
 
-    private var borderStroke: Color {
-      if isSelected {
-        return surfaceText.opacity(0.22)
+    private func normalized(lo: Double, hi: Double) -> Double {
+      guard hi != lo else { return 0 }
+      let t = (value - lo) / (hi - lo)
+      return min(1, max(0, t))
+    }
+
+    private func snapped(_ v: Double, lo: Double, hi: Double) -> Double {
+      let clamped = min(hi, max(lo, v))
+      guard step > 0 else { return clamped }
+      let steps = (clamped - lo) / step
+      let rounded = steps.rounded()
+      return lo + rounded * step
+    }
+
+    private func accessibilityValue(lo: Double, hi: Double) -> String {
+      if lo == 0, hi == 1 {
+        return "\(Int((normalized(lo: lo, hi: hi) * 100).rounded()))%"
       }
-      return surfaceText.opacity(0.10)
+      return "\(value)"
     }
   }
 
