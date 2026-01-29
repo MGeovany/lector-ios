@@ -221,8 +221,12 @@ struct ReaderSettingsMainSettingsView: View {
       title: "Brightness",
       systemImage: "sun.max",
       value: Binding(
-        get: { Double(UIScreen.main.brightness) },
-        set: { UIScreen.main.brightness = min(1, max(0, CGFloat($0))) }
+        get: { preferences.brightness },
+        set: {
+          let clamped = min(1, max(0, $0))
+          preferences.brightness = clamped
+          ReaderActiveScreen.setBrightness(CGFloat(clamped))
+        }
       ),
       range: 0...1,
       surfaceText: preferences.theme.surfaceText,

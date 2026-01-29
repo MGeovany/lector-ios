@@ -243,6 +243,16 @@ struct ReaderView: View {
           )
         }
       }
+      .overlay {
+        // In-app brightness fallback (works even when system brightness is restricted)
+        let b = min(1.0, max(0.0, preferences.brightness))
+        let dim = min(0.78, max(0.0, (1.0 - b) * 0.90))
+        if dim > 0.001 {
+          Color.black.opacity(dim)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+        }
+      }
       .frame(maxWidth: 720)
       .frame(maxWidth: .infinity)
       // .border(Color.blue, width: 1)
@@ -318,6 +328,7 @@ struct ReaderView: View {
       }
     }
     .onAppear {
+      ReaderActiveScreen.installBrightnessChangeLogging()
       audiobook.setOnRequestPageIndexChange { idx in
         DispatchQueue.main.async {
           viewModel.currentIndex = min(max(0, idx), max(0, viewModel.pages.count - 1))

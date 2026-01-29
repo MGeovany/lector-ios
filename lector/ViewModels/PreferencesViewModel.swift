@@ -10,6 +10,7 @@ struct ReadingPreferencesSnapshot: Equatable {
   var lineSpacing: Double
   var textAlignment: ReadingTextAlignment
   var continuousScrollForShortDocs: Bool
+  var brightness: Double
 }
 
 protocol ReadingPreferencesStoring {
@@ -50,13 +51,18 @@ struct UserDefaultsReadingPreferencesStore: ReadingPreferencesStoring {
       defaults.object(forKey: PreferencesKeys.continuousScrollForShortDocs) as? Bool
       ?? ReadingPreferencesDefaults.continuousScrollForShortDocs
 
+    let brightness =
+      defaults.object(forKey: PreferencesKeys.readingBrightness) as? Double
+      ?? ReadingPreferencesDefaults.brightness
+
     return ReadingPreferencesSnapshot(
       theme: theme,
       font: font,
       fontSize: fontSize,
       lineSpacing: lineSpacing,
       textAlignment: textAlignment,
-      continuousScrollForShortDocs: continuousScrollForShortDocs
+      continuousScrollForShortDocs: continuousScrollForShortDocs,
+      brightness: brightness
     )
   }
 
@@ -68,6 +74,7 @@ struct UserDefaultsReadingPreferencesStore: ReadingPreferencesStoring {
     defaults.set(snapshot.textAlignment.rawValue, forKey: PreferencesKeys.readingTextAlignment)
     defaults.set(
       snapshot.continuousScrollForShortDocs, forKey: PreferencesKeys.continuousScrollForShortDocs)
+    defaults.set(snapshot.brightness, forKey: PreferencesKeys.readingBrightness)
   }
 }
 
@@ -81,6 +88,7 @@ final class PreferencesViewModel: ObservableObject {
   @Published var lineSpacing: Double
   @Published var textAlignment: ReadingTextAlignment
   @Published var continuousScrollForShortDocs: Bool
+  @Published var brightness: Double
 
   private let store: ReadingPreferencesStoring
   private var saved: ReadingPreferencesSnapshot
@@ -99,6 +107,7 @@ final class PreferencesViewModel: ObservableObject {
     self.lineSpacing = snapshot.lineSpacing
     self.textAlignment = snapshot.textAlignment
     self.continuousScrollForShortDocs = snapshot.continuousScrollForShortDocs
+    self.brightness = snapshot.brightness
 
     self.saved = snapshot
   }
@@ -119,6 +128,7 @@ final class PreferencesViewModel: ObservableObject {
     lineSpacing = ReadingPreferencesDefaults.lineSpacing
     textAlignment = ReadingPreferencesDefaults.textAlignment
     continuousScrollForShortDocs = ReadingPreferencesDefaults.continuousScrollForShortDocs
+    brightness = ReadingPreferencesDefaults.brightness
     save()
   }
 
@@ -129,7 +139,8 @@ final class PreferencesViewModel: ObservableObject {
       fontSize: fontSize,
       lineSpacing: lineSpacing,
       textAlignment: textAlignment,
-      continuousScrollForShortDocs: continuousScrollForShortDocs
+      continuousScrollForShortDocs: continuousScrollForShortDocs,
+      brightness: brightness
     )
   }
 }

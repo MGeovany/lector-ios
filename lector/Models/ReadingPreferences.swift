@@ -184,4 +184,5 @@ struct ReadingPreferencesDefaults {
   static let lineSpacing: Double = 1.12
   static let textAlignment: ReadingTextAlignment = .default
   static let continuousScrollForShortDocs: Bool = false
+  static let brightness: Double = 1.0
 }
