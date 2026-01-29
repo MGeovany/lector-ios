@@ -13,8 +13,19 @@ struct ReaderSettingsPanelSheet: View {
   @Binding var localDragOffset: CGFloat
   @Binding var screen: ReaderSettingsPanelScreen
   @Binding var fontPage: Int
+  // set to draggable range
+  private var maxPanelH: CGFloat { containerHeight * 0.60 }
+  private var minPanelH: CGFloat { containerHeight * 0.14 }
 
   var body: some View {
+    let maxH = maxPanelH
+    let minH = minPanelH
+    let collapseRange = max(1, maxH - minH)
+
+    let clampedDrag = min(max(localDragOffset, 0), collapseRange)
+
+    let currentH = maxH - clampedDrag
+
     VStack(spacing: 0) {
       ReaderSettingsPanelHeaderView(
         title: screen == .main ? "Reader Settings" : "Text Customize",
@@ -42,14 +53,23 @@ struct ReaderSettingsPanelSheet: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 10)
       }
+      .clipped()
+      .scrollDisabled(currentH <= (minH + 30))
+      .opacity(currentH <= (minH + 10) ? 0 : 1)
     }
     .frame(maxWidth: .infinity)
-    .frame(height: containerHeight * 0.60)
+    .frame(height: currentH)
     .background(panelBackground)
     .clipShape(.rect(topLeadingRadius: 24, topTrailingRadius: 24))
-    .offset(y: max(0, localDragOffset))
     .animation(nil, value: localDragOffset)
     .transition(.move(edge: .bottom).combined(with: .opacity))
+
+    .onChange(of: localDragOffset) { _, newValue in
+      let clamped = min(max(newValue, 0), collapseRange)
+      if clamped != newValue {
+        localDragOffset = clamped
+      }
+    }
   }
 
   private var panelBackground: Color {
