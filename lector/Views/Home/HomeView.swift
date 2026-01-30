@@ -22,11 +22,11 @@ struct HomeView: View {
 
         ScrollView(showsIndicators: false) {
           VStack(alignment: .leading, spacing: 16) {
-              HomeHeaderView(
-                searchText: $viewModel.searchQuery,
-                onAddTapped: {
-                  showFilePicker = true
-                })
+            HomeHeaderView(
+              searchText: $viewModel.searchQuery,
+              onAddTapped: {
+                showFilePicker = true
+              })
 
             if !networkMonitor.isOnline {
               Text("Offline — showing cached library.")

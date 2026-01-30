@@ -79,7 +79,9 @@ final class HomeViewModel {
           lastOpenedAt: pending?.updatedAt ?? summary.updatedAt,
           lastOpenedDaysAgo: max(
             0,
-            Calendar.current.dateComponents([.day], from: pending?.updatedAt ?? summary.updatedAt, to: Date()).day ?? 0
+            Calendar.current.dateComponents(
+              [.day], from: pending?.updatedAt ?? summary.updatedAt, to: Date()
+            ).day ?? 0
           ),
           isRead: (currentPage >= pagesTotal && pagesTotal > 0),
           isFavorite: summary.isFavorite,
@@ -91,7 +93,9 @@ final class HomeViewModel {
       case .recents:
         books = baseBooks.sorted { $0.lastOpenedSortDate > $1.lastOpenedSortDate }
       case .all, .read:
-        books = baseBooks.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        books = baseBooks.sorted {
+          $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
       }
     }
 
@@ -102,7 +106,8 @@ final class HomeViewModel {
         Book(
           id: UUID(uuidString: item.id) ?? UUID(),
           remoteID: nil,
-          title: item.fileName.replacingOccurrences(of: ".pdf", with: "", options: [.caseInsensitive]),
+          title: item.fileName.replacingOccurrences(
+            of: ".pdf", with: "", options: [.caseInsensitive]),
           author: "Queued",
           pagesTotal: 1,
           currentPage: 1,
@@ -402,7 +407,8 @@ final class HomeViewModel {
         )
         PendingReadingPositionStore.remove(documentID: remoteID)
       } catch {
-        PendingReadingPositionStore.save(documentID: remoteID, pageNumber: pageNumber, progress: progress)
+        PendingReadingPositionStore.save(
+          documentID: remoteID, pageNumber: pageNumber, progress: progress)
       }
     }
   }
