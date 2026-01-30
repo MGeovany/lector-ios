@@ -315,7 +315,7 @@ struct ReaderView: View {
       }
       .frame(maxWidth: 720)
       .frame(maxWidth: .infinity)
-      .padding(.horizontal, showEdges ? 12 : 6)
+      .padding(.horizontal, settings.isPresented ? 0 : (showEdges ? 12 : 6))
     }
     .toolbar(.hidden, for: .tabBar)
     .toolbar(.hidden, for: .navigationBar)
