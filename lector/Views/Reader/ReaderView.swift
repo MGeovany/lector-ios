@@ -413,13 +413,16 @@ struct ReaderView: View {
     .onAppear {
       networkMonitor.startIfNeeded()
       #if DEBUG
-      print("[ReaderView] onAppear readerStatusBarScheme=\(readerStatusBarScheme) appThemeColorScheme=\(appThemeColorScheme)")
+        print(
+          "[ReaderView] onAppear readerStatusBarScheme=\(readerStatusBarScheme) appThemeColorScheme=\(appThemeColorScheme)"
+        )
       #endif
       applyReaderStatusBarStyle(readerStatusBarScheme)
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
         applyReaderStatusBarStyle(readerStatusBarScheme)
         #if DEBUG
-        print("[ReaderView] onAppear delayed re-apply readerStatusBarScheme=\(readerStatusBarScheme)")
+          print(
+            "[ReaderView] onAppear delayed re-apply readerStatusBarScheme=\(readerStatusBarScheme)")
         #endif
       }
       if let id = book.remoteID, !id.isEmpty {
@@ -450,13 +453,14 @@ struct ReaderView: View {
     }
     .onChange(of: readerStatusBarScheme, initial: true) { _, newScheme in
       #if DEBUG
-      print("[ReaderView] onChange(readerStatusBarScheme) initial/change -> newScheme=\(newScheme)")
+        print(
+          "[ReaderView] onChange(readerStatusBarScheme) initial/change -> newScheme=\(newScheme)")
       #endif
       applyReaderStatusBarStyle(newScheme)
     }
     .onDisappear {
       #if DEBUG
-      print("[ReaderView] onDisappear restoring appThemeColorScheme=\(appThemeColorScheme)")
+        print("[ReaderView] onDisappear restoring appThemeColorScheme=\(appThemeColorScheme)")
       #endif
       applyReaderStatusBarStyle(appThemeColorScheme)
       disableAudiobook()
@@ -470,13 +474,14 @@ struct ReaderView: View {
   }
 
   private func applyReaderStatusBarStyle(_ scheme: ColorScheme?) {
-    let uiStyle: UIUserInterfaceStyle = scheme.map { s in
-      switch s {
-      case .light: return .light
-      case .dark: return .dark
-      @unknown default: return .unspecified
-      }
-    } ?? .unspecified
+    let uiStyle: UIUserInterfaceStyle =
+      scheme.map { s in
+        switch s {
+        case .light: return .light
+        case .dark: return .dark
+        @unknown default: return .unspecified
+        }
+      } ?? .unspecified
 
     let scenes = UIApplication.shared.connectedScenes
       .compactMap { $0 as? UIWindowScene }
@@ -484,21 +489,25 @@ struct ReaderView: View {
     let keyWindow = windows.first(where: \.isKeyWindow)
 
     #if DEBUG
-    let readerTheme = preferences.theme
-    let appTheme = AppTheme(rawValue: appThemeRawValue) ?? .dark
-    print("[ReaderView] applyReaderStatusBarStyle scheme=\(String(describing: scheme)) uiStyle=\(uiStyle.rawValue) readerTheme=\(readerTheme) appTheme=\(appTheme) windowsCount=\(windows.count) keyWindow=\(keyWindow != nil)")
+      let readerTheme = preferences.theme
+      let appTheme = AppTheme(rawValue: appThemeRawValue) ?? .dark
+      print(
+        "[ReaderView] applyReaderStatusBarStyle scheme=\(String(describing: scheme)) uiStyle=\(uiStyle.rawValue) readerTheme=\(readerTheme) appTheme=\(appTheme) windowsCount=\(windows.count) keyWindow=\(keyWindow != nil)"
+      )
     #endif
 
     guard let window = keyWindow ?? windows.first else {
       #if DEBUG
-      print("[ReaderView] applyReaderStatusBarStyle FAILED: no window")
+        print("[ReaderView] applyReaderStatusBarStyle FAILED: no window")
       #endif
       return
     }
     window.overrideUserInterfaceStyle = uiStyle
     window.rootViewController?.overrideUserInterfaceStyle = uiStyle
     #if DEBUG
-    print("[ReaderView] applyReaderStatusBarStyle SET window+rootVC.overrideUserInterfaceStyle=\(uiStyle.rawValue)")
+      print(
+        "[ReaderView] applyReaderStatusBarStyle SET window+rootVC.overrideUserInterfaceStyle=\(uiStyle.rawValue)"
+      )
     #endif
   }
 
