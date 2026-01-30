@@ -14,6 +14,12 @@ struct ReaderSettingsPanelView: View {
   let onEnableAudiobook: () -> Void
   let onDisableAudiobook: () -> Void
 
+  @Binding var offlineEnabled: Bool
+  let onEnableOffline: () -> Void
+  let onDisableOffline: () -> Void
+  let offlineSubtitle: String?
+  let offlineIsAvailable: Bool
+
   @State private var localDragOffset: CGFloat = 0
   @State private var screen: ReaderSettingsPanelScreen = .main
   @State private var fontPage: Int = 0
@@ -33,7 +39,12 @@ struct ReaderSettingsPanelView: View {
           fontPage: $fontPage,
           audiobookEnabled: $audiobookEnabled,
           onEnableAudiobook: onEnableAudiobook,
-          onDisableAudiobook: onDisableAudiobook
+          onDisableAudiobook: onDisableAudiobook,
+          offlineEnabled: $offlineEnabled,
+          onEnableOffline: onEnableOffline,
+          onDisableOffline: onDisableOffline,
+          offlineSubtitle: offlineSubtitle,
+          offlineIsAvailable: offlineIsAvailable
         )
         .environmentObject(preferences)
       }

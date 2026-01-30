@@ -21,7 +21,16 @@ enum APIConfig {
     let value =
       (Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String)?.trimmingCharacters(
         in: .whitespacesAndNewlines)
-    let fallback = "https://reader-go-383281059490.us-central1.run.app/api/v1"
+    #if DEBUG
+      #if targetEnvironment(simulator)
+        let fallback = "http://localhost:8080/api/v1"
+      #else
+        // On device, localhost points to the phone. Use API_BASE_URL to target your Mac.
+        let fallback = "https://reader-go-383281059490.us-central1.run.app/api/v1"
+      #endif
+    #else
+      let fallback = "https://reader-go-383281059490.us-central1.run.app/api/v1"
+    #endif
     return normalizeHTTPURL(value?.isEmpty == false ? value! : fallback, fallback: fallback)
   }
 

@@ -1,10 +1,7 @@
 import UIKit
 
 enum ReaderActiveScreen {
-#if DEBUG
-  private static let logPrefix = "[ReaderBrightness]"
-  static var logsEnabled: Bool = true
-#endif
+  // Intentionally no logging here (brightness is user-facing).
 
   static func screen() -> UIScreen? {
     // Best-effort: pick the foreground-active scene's screen.
@@ -37,13 +34,6 @@ enum ReaderActiveScreen {
     return out
   }
 
-  private static func log(_ message: String) {
-#if DEBUG
-    guard logsEnabled else { return }
-    print("\(logPrefix) \(message)")
-#endif
-  }
-
   static func getBrightness() -> CGFloat {
     let read: () -> CGFloat = {
       screen()?.brightness ?? UIScreen.main.brightness
@@ -61,20 +51,10 @@ enum ReaderActiveScreen {
 
     let apply: () -> Void = {
       let screens = allCandidateScreens()
-      if screens.isEmpty {
-        log("No screens available; cannot set brightness")
-        return
-      }
-
-      let before = screens.map { $0.brightness }
-      log("Set requested: \(String(format: "%.2f", Double(clamped))) | candidates: \(screens.count) | before: \(before.map { String(format: "%.2f", Double($0)) }.joined(separator: ","))")
-
+      if screens.isEmpty { return }
       for s in screens {
         s.brightness = clamped
       }
-
-      let after = screens.map { $0.brightness }
-      log("After set: \(after.map { String(format: "%.2f", Double($0)) }.joined(separator: ","))")
     }
 
     if Thread.isMainThread {
@@ -84,18 +64,5 @@ enum ReaderActiveScreen {
     }
   }
 
-  static func installBrightnessChangeLogging() {
-#if DEBUG
-    guard logsEnabled else { return }
-    NotificationCenter.default.addObserver(
-      forName: UIScreen.brightnessDidChangeNotification,
-      object: nil,
-      queue: .main
-    ) { _ in
-      let screens = allCandidateScreens()
-      let values = screens.map { String(format: "%.2f", Double($0.brightness)) }.joined(separator: ",")
-      log("brightnessDidChangeNotification | now: \(values)")
-    }
-#endif
-  }
+  static func installBrightnessChangeLogging() {}
 }

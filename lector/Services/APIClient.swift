@@ -133,15 +133,23 @@ final class APIClient {
 
   init(
     baseURL: URL = APIConfig.baseURL,
-    session: URLSession = .shared,
+    session: URLSession? = nil,
     tokenProvider: AuthTokenProviding = KeychainAuthTokenProvider(),
     authService: SupabaseAuthServicing = SupabaseAuthService()
   ) {
     self.baseURL = baseURL
-    self.session = session
+    self.session = session ?? APIClient.defaultSession
     self.tokenProvider = tokenProvider
     self.authService = authService
   }
+
+  private static let defaultSession: URLSession = {
+    let config = URLSessionConfiguration.ephemeral
+    config.waitsForConnectivity = false
+    config.timeoutIntervalForRequest = 20
+    config.timeoutIntervalForResource = 30
+    return URLSession(configuration: config)
+  }()
 
   func get<T: Decodable>(_ path: String) async throws -> T {
     var request = try makeRequest(path: path, method: "GET")
@@ -261,10 +269,26 @@ final class APIClient {
     didRetryAfterRefresh: Bool
   ) async throws -> T {
     do {
+      #if DEBUG
+        let shouldLog = request.url?.path.contains("/documents/") == true
+          && request.url?.path.contains("/optimized") == true
+        let startedAt = Date()
+        if shouldLog {
+          print("[API] -> \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "")")
+        }
+      #endif
+
       let (data, response) = try await session.data(for: request)
       guard let http = response as? HTTPURLResponse else {
         throw APIError.invalidResponse
       }
+
+      #if DEBUG
+        if shouldLog {
+          let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
+          print("[API] <- \(http.statusCode) (\(ms)ms) \(data.count) bytes")
+        }
+      #endif
       let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
 
       if !(200...299).contains(http.statusCode) {
@@ -377,6 +401,15 @@ final class APIClient {
     } catch let apiError as APIError {
       throw apiError
     } catch {
+      #if DEBUG
+        let shouldLog = request.url?.path.contains("/documents/") == true
+          && request.url?.path.contains("/optimized") == true
+        if shouldLog {
+          print(
+            "[API] !! \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "") error=\(error)"
+          )
+        }
+      #endif
       #if canImport(Sentry)
         let event = Event(error: error)
         event.level = .error

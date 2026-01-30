@@ -6,6 +6,8 @@ protocol DocumentsServicing {
   /// Default implementation falls back to fetching all documents.
   func getRecentDocumentsByUserID(_ userID: String, since: Date, limit: Int) async throws -> [RemoteDocument]
   func getDocument(id: String) async throws -> RemoteDocumentDetail
+  func getOptimizedDocument(id: String) async throws -> RemoteOptimizedDocument
+  func getOptimizedDocumentMeta(id: String) async throws -> RemoteOptimizedDocument
   func updateDocument(documentID: String, title: String?, author: String?, tag: String?) async throws -> RemoteDocumentDetail
   func uploadDocument(pdfData: Data, fileName: String) async throws -> RemoteDocument
   func deleteDocument(documentID: String) async throws
@@ -47,6 +49,17 @@ final class GoDocumentsService: DocumentsServicing {
 
   func getDocument(id: String) async throws -> RemoteDocumentDetail {
     try await api.get("documents/\(id)")
+  }
+
+  func getOptimizedDocument(id: String) async throws -> RemoteOptimizedDocument {
+    try await api.get("documents/\(id)/optimized")
+  }
+
+  func getOptimizedDocumentMeta(id: String) async throws -> RemoteOptimizedDocument {
+    try await api.get(
+      "documents/\(id)/optimized",
+      queryItems: [URLQueryItem(name: "include_pages", value: "0")]
+    )
   }
 
   func updateDocument(documentID: String, title: String?, author: String?, tag: String?) async throws

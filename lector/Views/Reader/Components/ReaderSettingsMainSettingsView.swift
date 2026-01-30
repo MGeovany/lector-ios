@@ -14,6 +14,12 @@ struct ReaderSettingsMainSettingsView: View {
   let onEnableAudiobook: () -> Void
   let onDisableAudiobook: () -> Void
 
+  @Binding var offlineEnabled: Bool
+  let onEnableOffline: () -> Void
+  let onDisableOffline: () -> Void
+  let offlineSubtitle: String?
+  let offlineIsAvailable: Bool
+
   var body: some View {
     let gap: CGFloat = 15
 
@@ -110,6 +116,8 @@ struct ReaderSettingsMainSettingsView: View {
       title: "Voice",
       systemImage: "waveform",
       isSelected: audiobookEnabled,
+      subtitle: nil,
+      showsBadge: false,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
@@ -172,13 +180,27 @@ struct ReaderSettingsMainSettingsView: View {
   private var offlineTile: some View {
     ReaderSettingsRoundToggleTile(
       title: "Offline",
-      systemImage: "wifi.slash",
-      isSelected: false,
+      systemImage: offlineEnabled ? "wifi.slash" : "wifi",
+      isSelected: offlineEnabled,
+      subtitle: offlineSubtitle,
+      showsBadge: offlineIsAvailable,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
-      action: {}
+      action: {
+        let next = !offlineEnabled
+        offlineEnabled = next
+        if next {
+          onEnableOffline()
+        } else {
+          onDisableOffline()
+          withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            isPresented = false
+          }
+        }
+      }
     )
+    .accessibilityLabel(Text("Offline"))
   }
 
   private var lockTile: some View {
@@ -186,6 +208,8 @@ struct ReaderSettingsMainSettingsView: View {
       title: "Focus",
       systemImage: isLocked ? "viewfinder" : "viewfinder.circle",
       isSelected: isLocked,
+      subtitle: nil,
+      showsBadge: false,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,

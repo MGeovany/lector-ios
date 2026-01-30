@@ -11,6 +11,7 @@ struct ReaderView: View {
 
   @StateObject private var viewModel = ReaderViewModel()
   @StateObject private var audiobook = ReaderAudiobookViewModel()
+  @StateObject private var networkMonitor = NetworkMonitor.shared
 
   @State private var search = ReaderSearchState()
   @State private var highlight = ReaderHighlightState()
@@ -21,6 +22,14 @@ struct ReaderView: View {
   @State private var audiobookEnabled: Bool = false
   @State private var audiobookScrollToIndex: Int? = nil
   @State private var audiobookScrollToToken: Int = 0
+
+  @State private var offlineEnabled: Bool = false
+  @State private var isOfflineSaving: Bool = false
+  @State private var offlineSaveMessage: String? = nil
+  @State private var offlineSubtitle: String? = nil
+  @State private var offlineMeta: RemoteOptimizedDocument? = nil
+  @State private var offlineLastAutoDownloadAt: Date? = nil
+  @State private var offlineMonitorTask: Task<Void, Never>? = nil
 
   @State private var isDismissing: Bool = false
   @State private var didStartLoading: Bool = false
@@ -72,8 +81,7 @@ struct ReaderView: View {
       .ignoresSafeArea()
 
       VStack(spacing: 0) {
-        ReaderCollapsibleTopBar(isVisible: showEdges, measuredHeight: $chrome.measuredHeight)
-        {
+        ReaderCollapsibleTopBar(isVisible: showEdges, measuredHeight: $chrome.measuredHeight) {
           ReaderTopBarView(
             horizontalPadding: horizontalPadding,
             showReaderSettings: $settings.isPresented,
@@ -279,7 +287,12 @@ struct ReaderView: View {
                 searchQuery: $search.query,
                 audiobookEnabled: $audiobookEnabled,
                 onEnableAudiobook: enableAudiobook,
-                onDisableAudiobook: disableAudiobook
+                onDisableAudiobook: disableAudiobook,
+                offlineEnabled: $offlineEnabled,
+                onEnableOffline: enableOffline,
+                onDisableOffline: disableOffline,
+                offlineSubtitle: offlineSubtitle,
+                offlineIsAvailable: offlineIsAvailable
               )
             }
           }
@@ -339,6 +352,29 @@ struct ReaderView: View {
           .environmentObject(preferences)
       }
     }
+    .overlay(alignment: .bottom) {
+      if isOfflineSaving {
+        HStack(spacing: 10) {
+          ProgressView()
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Downloading in the background")
+              .font(.parkinsansSemibold(size: 12))
+              .foregroundStyle(preferences.theme.surfaceText.opacity(0.92))
+            Text(offlineSaveMessage ?? "Downloading…")
+              .font(.parkinsans(size: 11, weight: .regular))
+              .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(0.85))
+          }
+          Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 24)
+        .allowsHitTesting(false)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+    }
     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: highlight.isPresented)
     .onChange(of: settings.isLocked) { _, locked in
       if locked {
@@ -365,7 +401,21 @@ struct ReaderView: View {
       }
     }
     .onAppear {
-      ReaderActiveScreen.installBrightnessChangeLogging()
+      networkMonitor.startIfNeeded()
+      if let id = book.remoteID, !id.isEmpty {
+        offlineEnabled = OfflinePinStore.isPinned(remoteID: id)
+        refreshOfflineSubtitle(remoteID: id)
+
+        startOfflineMonitor(remoteID: id)
+
+        Task {
+          // Lightweight: fetch meta only (no pages) for size estimate.
+          if let meta = try? await documentsService.getOptimizedDocumentMeta(id: id) {
+            offlineMeta = meta
+            refreshOfflineSubtitle(remoteID: id)
+          }
+        }
+      }
       audiobook.setOnRequestPageIndexChange { idx in
         DispatchQueue.main.async {
           viewModel.currentIndex = min(max(0, idx), max(0, viewModel.pages.count - 1))
@@ -379,6 +429,7 @@ struct ReaderView: View {
     .onDisappear {
       disableAudiobook()
       cancelFocusAutoHide()
+      stopOfflineMonitor()
     }
   }
 
@@ -431,6 +482,210 @@ struct ReaderView: View {
     }
     audiobookEnabled = false
     audiobook.disable()
+  }
+
+  @MainActor private func enableOffline() {
+    guard let id = book.remoteID, !id.isEmpty else { return }
+    OfflinePinStore.setPinned(remoteID: id, pinned: true)
+    offlineEnabled = true
+    offlineLastAutoDownloadAt = nil
+
+    withAnimation(.spring(response: 0.30, dampingFraction: 0.85)) {
+      settings.isPresented = false
+    }
+
+    // Only start download immediately if we're online (prefer Wi-Fi).
+    if networkMonitor.isOnline, networkMonitor.isOnWiFi {
+      Task { @MainActor in
+        await downloadAndSaveOffline(remoteID: id)
+      }
+    }
+
+    startOfflineMonitor(remoteID: id)
+  }
+
+  @MainActor private func disableOffline() {
+    guard let id = book.remoteID, !id.isEmpty else { return }
+    OfflinePinStore.setPinned(remoteID: id, pinned: false)
+    offlineEnabled = false
+    OptimizedPagesStore.delete(remoteID: id)
+    refreshOfflineSubtitle(remoteID: id)
+    stopOfflineMonitor()
+  }
+
+  @MainActor private func downloadAndSaveOffline(remoteID: String) async {
+    guard !isOfflineSaving else { return }
+    isOfflineSaving = true
+    offlineSaveMessage = "Downloading…"
+    refreshOfflineSubtitle(remoteID: remoteID)
+    print("[OfflineDownload] start id=\(remoteID)")
+    defer {
+      isOfflineSaving = false
+      offlineSaveMessage = nil
+      refreshOfflineSubtitle(remoteID: remoteID)
+      print("[OfflineDownload] end id=\(remoteID)")
+    }
+
+    do {
+      let maxWaitSeconds: Int = 45
+      let intervalSeconds: Int = 2
+      var waited: Int = 0
+
+      while waited <= maxWaitSeconds {
+        print("[OfflineDownload] poll t=\(waited)s id=\(remoteID)")
+        let opt = try await documentsService.getOptimizedDocument(id: remoteID)
+        offlineMeta = opt
+
+        let total = opt.pages?.count ?? 0
+        let ready =
+          opt.pages?.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+          ?? 0
+        if total > 0, let totalBytes = opt.optimizedSizeBytes {
+          let ratio = min(1, max(0, Double(ready) / Double(total)))
+          let estimatedBytes = Int64((Double(totalBytes) * ratio).rounded(.down))
+          offlineSaveMessage = formatProgressMB(estimatedBytes)
+        } else {
+          offlineSaveMessage = "Downloading…"
+        }
+        refreshOfflineSubtitle(remoteID: remoteID)
+
+        let bytesStr = opt.optimizedSizeBytes.map { "\($0)" } ?? "nil"
+        print("[OfflineDownload] response status=\(opt.processingStatus) pages=\(ready)/\(total) optimizedSizeBytes=\(bytesStr) display=\(offlineSaveMessage ?? "")")
+
+        if let pages = opt.pages, !pages.isEmpty {
+          try? OptimizedPagesStore.savePages(
+            remoteID: remoteID,
+            pages: pages,
+            optimizedVersion: opt.optimizedVersion,
+            optimizedChecksumSHA256: opt.optimizedChecksumSHA256
+          )
+          if opt.processingStatus == "ready" {
+            print("[OfflineDownload] done status=ready id=\(remoteID)")
+            return
+          }
+        }
+
+        if opt.processingStatus == "failed" {
+          offlineSaveMessage = "Failed."
+          print("[OfflineDownload] done status=failed id=\(remoteID)")
+          return
+        }
+
+        try? await Task.sleep(nanoseconds: UInt64(intervalSeconds) * 1_000_000_000)
+        waited += intervalSeconds
+      }
+
+      offlineSaveMessage = "Try again"
+      print("[OfflineDownload] done timeout after \(maxWaitSeconds)s id=\(remoteID)")
+    } catch {
+      offlineSaveMessage = "Failed"
+      print("[OfflineDownload] error id=\(remoteID) error=\(error)")
+    }
+  }
+
+  private var offlineIsAvailable: Bool {
+    guard let id = book.remoteID, !id.isEmpty else { return false }
+    return OptimizedPagesStore.hasLocalCopy(remoteID: id)
+  }
+
+  @MainActor private func attemptAutoDownloadIfNeeded(remoteID: String) {
+    guard OfflinePinStore.isPinned(remoteID: remoteID) else { return }
+    guard OptimizedPagesStore.loadManifest(remoteID: remoteID) == nil else { return }
+    guard offlineIsAvailable else { return }
+    guard !isOfflineSaving else { return }
+
+    let now = Date()
+    if let last = offlineLastAutoDownloadAt, now.timeIntervalSince(last) < 12 {
+      return
+    }
+    offlineLastAutoDownloadAt = now
+
+    Task { @MainActor in
+      await downloadAndSaveOffline(remoteID: remoteID)
+    }
+  }
+
+  @MainActor private func refreshOfflineSubtitle(remoteID: String) {
+    guard isOfflineSaving else {
+      offlineSubtitle = nil
+      return
+    }
+    offlineSubtitle = offlineDownloadProgressLabelText()
+  }
+
+  private func offlineDownloadProgressLabelText() -> String {
+    if let meta = offlineMeta,
+      let totalBytes = meta.optimizedSizeBytes,
+      let pages = meta.pages,
+      !pages.isEmpty
+    {
+      let total = pages.count
+      let ready = pages.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+      if total > 0 {
+        let ratio = min(1, max(0, Double(ready) / Double(total)))
+        let estimatedBytes = Int64((Double(totalBytes) * ratio).rounded(.down))
+        return formatProgressMB(estimatedBytes)
+      }
+    }
+
+    if let msg = offlineSaveMessage, !msg.isEmpty {
+      let cleaned = msg.lowercased().replacingOccurrences(of: " ", with: "")
+      if cleaned.contains(where: { $0.isNumber }) {
+        return cleaned
+      }
+      return "…"
+    }
+    return "…"
+  }
+
+  private func formatProgressMB(_ bytes: Int64) -> String {
+    let formatter = ByteCountFormatter()
+    formatter.allowedUnits = [.useMB]
+    formatter.countStyle = .file
+    formatter.includesUnit = true
+    formatter.isAdaptive = false
+    formatter.allowsNonnumericFormatting = false
+
+    return formatter.string(fromByteCount: max(0, bytes))
+      .lowercased()
+      .replacingOccurrences(of: " ", with: "")
+  }
+
+  @MainActor private func startOfflineMonitor(remoteID: String) {
+    stopOfflineMonitor()
+    offlineMonitorTask = Task { @MainActor in
+      while !Task.isCancelled {
+        guard offlineEnabled else { return }
+        guard OfflinePinStore.isPinned(remoteID: remoteID) else { return }
+
+        if OptimizedPagesStore.loadManifest(remoteID: remoteID) != nil {
+          isOfflineSaving = false
+          offlineSaveMessage = nil
+          refreshOfflineSubtitle(remoteID: remoteID)
+          return
+        }
+
+        // Use full optimized payload so we can show page progress while preparing.
+        if let meta = try? await documentsService.getOptimizedDocument(id: remoteID) {
+          offlineMeta = meta
+          if meta.processingStatus == "ready" {
+            isOfflineSaving = false
+            offlineSaveMessage = nil
+          }
+          refreshOfflineSubtitle(remoteID: remoteID)
+        }
+
+        attemptAutoDownloadIfNeeded(remoteID: remoteID)
+        refreshOfflineSubtitle(remoteID: remoteID)
+
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+      }
+    }
+  }
+
+  @MainActor private func stopOfflineMonitor() {
+    offlineMonitorTask?.cancel()
+    offlineMonitorTask = nil
   }
 
   private func requestScrollToPage(_ idx: Int) {

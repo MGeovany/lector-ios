@@ -17,6 +17,12 @@ struct ReaderSettingsPanelSheet: View {
   @Binding var audiobookEnabled: Bool
   let onEnableAudiobook: () -> Void
   let onDisableAudiobook: () -> Void
+
+  @Binding var offlineEnabled: Bool
+  let onEnableOffline: () -> Void
+  let onDisableOffline: () -> Void
+  let offlineSubtitle: String?
+  let offlineIsAvailable: Bool
   // set to draggable range
   private var maxPanelH: CGFloat { containerHeight * 0.60 }
   private var minPanelH: CGFloat { containerHeight * 0.14 }
@@ -51,7 +57,12 @@ struct ReaderSettingsPanelSheet: View {
               fontPage: $fontPage,
               audiobookEnabled: $audiobookEnabled,
               onEnableAudiobook: onEnableAudiobook,
-              onDisableAudiobook: onDisableAudiobook
+              onDisableAudiobook: onDisableAudiobook,
+              offlineEnabled: $offlineEnabled,
+              onEnableOffline: onEnableOffline,
+              onDisableOffline: onDisableOffline,
+              offlineSubtitle: offlineSubtitle,
+              offlineIsAvailable: offlineIsAvailable
             )
           case .textCustomize:
             ReaderSettingsTextCustomizeSettingsView(

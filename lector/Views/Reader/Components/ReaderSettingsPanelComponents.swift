@@ -204,6 +204,8 @@ struct ReaderSettingsRoundToggleTile: View {
   let title: String
   let systemImage: String
   let isSelected: Bool
+  let subtitle: String?
+  let showsBadge: Bool
   let surfaceText: Color
   let secondaryText: Color
   let isEnabled: Bool
@@ -211,7 +213,7 @@ struct ReaderSettingsRoundToggleTile: View {
 
   var body: some View {
     Button(action: action) {
-      VStack(spacing: 10) {
+      VStack(spacing: 6) {
         ZStack {
           Circle()
             .fill(backgroundFill)
@@ -220,11 +222,35 @@ struct ReaderSettingsRoundToggleTile: View {
           Image(systemName: systemImage)
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(surfaceText.opacity(isEnabled ? 0.85 : 0.35))
+
+          if showsBadge {
+            Circle()
+              .fill(Color.green)
+              .frame(width: 10, height: 10)
+              .overlay(
+                Circle().stroke(Color.white.opacity(0.95), lineWidth: 2)
+              )
+              .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 2)
+              .offset(x: 18, y: -18)
+          }
         }
 
-        Text(title)
-          .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(secondaryText.opacity(isSelected ? 0.40 : 0.35))
+        VStack(spacing: 2) {
+          if !title.isEmpty {
+            Text(title)
+              .font(.system(size: 12, weight: .semibold))
+              .foregroundStyle(secondaryText.opacity(isSelected ? 0.44 : 0.38))
+          }
+
+          if let subtitle, !subtitle.isEmpty {
+            Text(subtitle)
+              .font(.system(size: 10, weight: .medium))
+              .foregroundStyle(secondaryText.opacity(0.28))
+              .lineLimit(2)
+              .multilineTextAlignment(.center)
+              .frame(maxWidth: 92)
+          }
+        }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

@@ -19,6 +19,14 @@ struct RemoteDocument: Codable, Hashable {
   /// Backend-managed favorite flag.
   let isFavorite: Bool
 
+  // Offline-first sync fields (optional; older backends won't send these)
+  let processingStatus: String?
+  let processedAt: Date?
+  let optimizedVersion: Int?
+  let optimizedChecksumSHA256: String?
+  let languageCode: String?
+  let originalSizeBytes: Int64?
+
   /// Optional reading progress returned by some endpoints.
   let readingPosition: RemoteReadingPosition?
 
@@ -38,6 +46,13 @@ struct RemoteDocument: Codable, Hashable {
     case readingPosition = "reading_position"
     case createdAt = "created_at"
     case updatedAt = "updated_at"
+
+    case processingStatus = "processing_status"
+    case processedAt = "processed_at"
+    case optimizedVersion = "optimized_version"
+    case optimizedChecksumSHA256 = "optimized_checksum_sha256"
+    case languageCode = "language_code"
+    case originalSizeBytes = "original_size_bytes"
   }
 
   init(from decoder: Decoder) throws {
@@ -54,6 +69,13 @@ struct RemoteDocument: Codable, Hashable {
     readingPosition = try container.decodeIfPresent(RemoteReadingPosition.self, forKey: .readingPosition)
     createdAt = try container.decode(Date.self, forKey: .createdAt)
     updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+
+    processingStatus = try container.decodeIfPresent(String.self, forKey: .processingStatus)
+    processedAt = try container.decodeIfPresent(Date.self, forKey: .processedAt)
+    optimizedVersion = try container.decodeIfPresent(Int.self, forKey: .optimizedVersion)
+    optimizedChecksumSHA256 = try container.decodeIfPresent(String.self, forKey: .optimizedChecksumSHA256)
+    languageCode = try container.decodeIfPresent(String.self, forKey: .languageCode)
+    originalSizeBytes = try container.decodeIfPresent(Int64.self, forKey: .originalSizeBytes)
   }
 }
 
