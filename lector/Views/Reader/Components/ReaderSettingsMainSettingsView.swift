@@ -183,8 +183,8 @@ struct ReaderSettingsMainSettingsView: View {
 
   private var lockTile: some View {
     ReaderSettingsRoundToggleTile(
-      title: "Lock",
-      systemImage: isLocked ? "lock.rotation" : "lock.rotation.open",
+      title: "Focus",
+      systemImage: isLocked ? "viewfinder" : "viewfinder.circle",
       isSelected: isLocked,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,

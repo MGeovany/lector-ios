@@ -27,6 +27,9 @@ struct ReaderView: View {
   @State private var resolvedStartPage: Int? = nil
   @State private var resolvedStartProgress: Double? = nil
 
+  @State private var focusAutoHideTask: Task<Void, Never>? = nil
+  @State private var focusSwipeInFlight: Bool = false
+
   private let documentsService: DocumentsServicing = GoDocumentsService()
   private let readingPositionService: ReadingPositionServicing = GoReadingPositionService()
 
@@ -49,6 +52,9 @@ struct ReaderView: View {
   }
 
   var body: some View {
+    let focusEnabled = settings.isLocked
+    let showEdges = !focusEnabled || chrome.isVisible
+
     ZStack {
       Group {
         if settings.isPresented {
@@ -66,7 +72,7 @@ struct ReaderView: View {
       .ignoresSafeArea()
 
       VStack(spacing: 0) {
-        ReaderCollapsibleTopBar(isVisible: chrome.isVisible, measuredHeight: $chrome.measuredHeight)
+        ReaderCollapsibleTopBar(isVisible: showEdges, measuredHeight: $chrome.measuredHeight)
         {
           ReaderTopBarView(
             horizontalPadding: horizontalPadding,
@@ -86,7 +92,7 @@ struct ReaderView: View {
             headerModel: ReaderHeaderModel(book: book, pages: viewModel.pages),
             horizontalPadding: horizontalPadding,
             shouldUseContinuousScroll: shouldUseContinuousScroll,
-            showTopChrome: chrome.isVisible,
+            showTopChrome: showEdges,
             showSearch: $search.isVisible,
             searchQuery: $search.query,
             clearSelectionToken: $highlight.clearSelectionToken,
@@ -109,6 +115,50 @@ struct ReaderView: View {
             },
             scrollToPageIndex: $audiobookScrollToIndex,
             scrollToPageToken: $audiobookScrollToToken
+          )
+          .contentShape(Rectangle())
+          .simultaneousGesture(
+            TapGesture().onEnded {
+              guard focusEnabled else { return }
+              withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                chrome.isVisible.toggle()
+              }
+              if chrome.isVisible {
+                scheduleFocusAutoHide()
+              } else {
+                cancelFocusAutoHide()
+              }
+            }
+          )
+          .simultaneousGesture(
+            DragGesture(minimumDistance: 16, coordinateSpace: .local)
+              .onEnded { value in
+                guard focusEnabled else { return }
+                guard !settings.isPresented else { return }
+                guard !search.isVisible else { return }
+                guard !highlight.isPresented else { return }
+                guard !viewModel.isLoading else { return }
+                guard !focusSwipeInFlight else { return }
+
+                let dx = value.translation.width
+                let dy = value.translation.height
+
+                // Only treat as a page-swipe when the gesture is primarily horizontal.
+                guard abs(dx) > max(24, abs(dy) * 1.35) else { return }
+
+                focusSwipeInFlight = true
+                defer {
+                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+                    focusSwipeInFlight = false
+                  }
+                }
+
+                if dx > 60 {
+                  focusSwipeAdvancePage()
+                } else if dx < -60 {
+                  focusSwipeGoBackPage()
+                }
+              }
           )
           .onChange(of: geo.size, initial: true) { _, newSize in
             startLoadingIfNeeded(container: newSize)
@@ -169,7 +219,6 @@ struct ReaderView: View {
             y: 0
           )
           .animation(.spring(response: 0.35, dampingFraction: 0.85), value: settings.isPresented)
-          .allowsHitTesting(!settings.isLocked)
           .onAppear {
             chrome.lastScrollOffsetY = scroll.offsetY
             if shouldUseContinuousScroll, scroll.offsetY > 40 {
@@ -187,7 +236,7 @@ struct ReaderView: View {
           }
           // Put the settings panel in an inset so it does NOT cover the document.
           .safeAreaInset(edge: .bottom, spacing: 12) {
-            if audiobookEnabled, !audiobook.isConverting, !settings.isPresented {
+            if showEdges, audiobookEnabled, !audiobook.isConverting, !settings.isPresented {
               let total = max(1, viewModel.pages.count)
               let idx = min(max(0, audiobook.currentPageIndex), max(0, total - 1))
               let overall = min(
@@ -220,21 +269,23 @@ struct ReaderView: View {
             }
           }
           .safeAreaInset(edge: .bottom, spacing: 20) {
-            ReaderSettingsPanelView(
-              containerHeight: geo.size.height,
-              isPresented: $settings.isPresented,
-              dragOffset: $settings.dragOffset,
-              isLocked: $settings.isLocked,
-              searchVisible: $search.isVisible,
-              searchQuery: $search.query,
-              audiobookEnabled: $audiobookEnabled,
-              onEnableAudiobook: enableAudiobook,
-              onDisableAudiobook: disableAudiobook
-            )
+            if showEdges {
+              ReaderSettingsPanelView(
+                containerHeight: geo.size.height,
+                isPresented: $settings.isPresented,
+                dragOffset: $settings.dragOffset,
+                isLocked: $settings.isLocked,
+                searchVisible: $search.isVisible,
+                searchQuery: $search.query,
+                audiobookEnabled: $audiobookEnabled,
+                onEnableAudiobook: enableAudiobook,
+                onDisableAudiobook: disableAudiobook
+              )
+            }
           }
         }
 
-        if !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {
+        if showEdges, !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {
           ReaderBottomPagerView(
             currentIndex: viewModel.currentIndex,
             totalPages: viewModel.pages.count,
@@ -289,42 +340,28 @@ struct ReaderView: View {
       }
     }
     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: highlight.isPresented)
-    .overlay(alignment: .center) {
-      if settings.isLocked {
-        Button {
-          withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            settings.isLocked = false
-            chrome.isVisible = true
-          }
-        } label: {
-          HStack(spacing: 10) {
-            Image(systemName: "lock.open.fill")
-              .font(.system(size: 14, weight: .bold))
-            Text("Unlock")
-              .font(.system(size: 14, weight: .bold))
-          }
-          .foregroundStyle(preferences.theme.surfaceText.opacity(0.92))
-          .padding(.horizontal, 16)
-          .padding(.vertical, 12)
-          .background(
-            Capsule(style: .continuous)
-              .fill(
-                preferences.theme.surfaceText.opacity(preferences.theme == .night ? 0.10 : 0.06))
-          )
-          .overlay(
-            Capsule(style: .continuous)
-              .stroke(preferences.theme.surfaceText.opacity(0.12), lineWidth: 1)
-          )
-        }
-        .buttonStyle(.plain)
-      }
-    }
     .onChange(of: settings.isLocked) { _, locked in
       if locked {
-        // Close chrome + settings and clear search when locking.
-        settings.isPresented = false
-        search.close()
-        chrome.isVisible = false
+        // Focus mode: hide top/bottom edges.
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+          settings.isPresented = false
+          search.close()
+          chrome.isVisible = false
+        }
+        cancelFocusAutoHide()
+      } else {
+        cancelFocusAutoHide()
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+          chrome.isVisible = true
+        }
+      }
+    }
+    .onChange(of: settings.isPresented) { _, isPresented in
+      if focusEnabled, !isPresented, chrome.isVisible {
+        scheduleFocusAutoHide()
+      }
+      if focusEnabled, isPresented {
+        cancelFocusAutoHide()
       }
     }
     .onAppear {
@@ -341,6 +378,7 @@ struct ReaderView: View {
     }
     .onDisappear {
       disableAudiobook()
+      cancelFocusAutoHide()
     }
   }
 
@@ -449,9 +487,59 @@ struct ReaderView: View {
 
   private func handleScrollStateChange() {
     updateScrollProgress()
+    if settings.isLocked { return }
     withAnimation(.spring(response: 0.24, dampingFraction: 0.9)) {
       chrome.updateVisibility(scrollOffsetY: scroll.offsetY, isSearchVisible: search.isVisible)
     }
+  }
+
+  private func scheduleFocusAutoHide() {
+    cancelFocusAutoHide()
+    focusAutoHideTask = Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 4_000_000_000)
+      guard settings.isLocked else { return }
+      guard !settings.isPresented else { return }
+      guard !search.isVisible else { return }
+      guard !highlight.isPresented else { return }
+      withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+        chrome.isVisible = false
+      }
+    }
+  }
+
+  private func focusSwipeAdvancePage() {
+    if shouldUseContinuousScroll {
+      let total = max(1, viewModel.pages.count)
+      let idx = min(
+        max(0, Int(round(scroll.progress * Double(max(0, total - 1))))),
+        max(0, total - 1)
+      )
+      let next = min(max(0, total - 1), idx + 1)
+      viewModel.currentIndex = next
+      requestScrollToPage(next)
+      return
+    }
+    viewModel.goToNextPage()
+  }
+
+  private func focusSwipeGoBackPage() {
+    if shouldUseContinuousScroll {
+      let total = max(1, viewModel.pages.count)
+      let idx = min(
+        max(0, Int(round(scroll.progress * Double(max(0, total - 1))))),
+        max(0, total - 1)
+      )
+      let prev = max(0, idx - 1)
+      viewModel.currentIndex = prev
+      requestScrollToPage(prev)
+      return
+    }
+    viewModel.goToPreviousPage()
+  }
+
+  private func cancelFocusAutoHide() {
+    focusAutoHideTask?.cancel()
+    focusAutoHideTask = nil
   }
 
   private func updateScrollProgress() {

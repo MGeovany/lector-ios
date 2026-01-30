@@ -38,6 +38,11 @@ struct ReaderContentScrollView: View {
   private let topAnchorID: String = "readerTop"
   private let scrollSpaceName: String = "readerScrollSpace"
 
+  private var bottomContentPadding: CGFloat {
+    // When chrome is hidden (Focus mode), keep the bottom tighter.
+    showTopChrome ? 18 : 8
+  }
+
   var body: some View {
     ScrollViewReader { proxy in
       ZStack {
@@ -95,7 +100,7 @@ struct ReaderContentScrollView: View {
               ReaderLoadingView()
                 .padding(.horizontal, horizontalPadding)
                 .padding(.top, 44)
-                .padding(.bottom, 26)
+                .padding(.bottom, bottomContentPadding)
             } else {
               if shouldUseContinuousScroll {
                 continuousText
@@ -192,7 +197,7 @@ struct ReaderContentScrollView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, horizontalPadding)
     .padding(.top, 18)
-    .padding(.bottom, 26)
+    .padding(.bottom, bottomContentPadding)
   }
 
   private var pagedText: some View {
@@ -211,7 +216,7 @@ struct ReaderContentScrollView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, horizontalPadding)
     .padding(.top, 18)
-    .padding(.bottom, 26)
+    .padding(.bottom, bottomContentPadding)
   }
 
   private var currentPageText: String {
