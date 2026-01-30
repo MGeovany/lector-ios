@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ReaderSettingsThemePill: View {
   @Binding var selected: ReadingTheme
@@ -281,6 +282,10 @@ struct ReaderSettingsVerticalPillSlider: View {
   private let iconSize: CGFloat = 18
 
   @State private var isDragging: Bool = false
+  @State private var lastHapticValue: Double = -1
+  @State private var lastHapticTime: Date = .distantPast
+
+  private static let hapticThrottleInterval: TimeInterval = 0.06
 
   var body: some View {
     let lo = min(range.lowerBound, range.upperBound)
@@ -331,7 +336,19 @@ struct ReaderSettingsVerticalPillSlider: View {
               let progress = 1.0 - Double(localY / h)  // 0...1 (top=1)
 
               let raw = lo + progress * (hi - lo)
-              value = snapped(raw, lo: lo, hi: hi)
+              let newValue = snapped(raw, lo: lo, hi: hi)
+              let now = Date()
+              let valueDelta = abs(newValue - lastHapticValue)
+              let timeSinceLastHaptic = now.timeIntervalSince(lastHapticTime)
+              let shouldHaptic = (lastHapticValue < 0 || valueDelta >= max(step * 0.5, 0.015))
+                && timeSinceLastHaptic >= Self.hapticThrottleInterval
+              if shouldHaptic {
+                let generator = UIImpactFeedbackGenerator(style: .soft)
+                generator.impactOccurred(intensity: 0.5)
+                lastHapticValue = newValue
+                lastHapticTime = now
+              }
+              value = newValue
             }
             .onEnded { _ in
               isDragging = false
@@ -344,8 +361,10 @@ struct ReaderSettingsVerticalPillSlider: View {
           switch direction {
           case .increment:
             value = min(hi, value + step)
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.5)
           case .decrement:
             value = max(lo, value - step)
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.5)
           @unknown default:
             break
           }
