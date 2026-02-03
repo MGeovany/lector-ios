@@ -24,13 +24,13 @@ struct ReaderSettingsPanelSheet: View {
   let offlineSubtitle: String?
   let offlineIsAvailable: Bool
 
-  @Binding var askAI: ReaderAskAIState
+  @ObservedObject var askAI: ReaderAskAIViewModel
 
   private var maxPanelH: CGFloat {
     switch screen {
     case .askAI:
       if askAI.messages.isEmpty {
-        return containerHeight * 0.18
+        return containerHeight * 0.25
       } else {
         return containerHeight * 0.62
       }
@@ -63,7 +63,7 @@ struct ReaderSettingsPanelSheet: View {
         switch screen {
         case .askAI:
           ReaderSettingsAskAIView(
-            askAI: $askAI,
+            viewModel: askAI,
             onBack: {
               withAnimation(.spring(response: 0.28, dampingFraction: 0.90)) {
                 screen = .main

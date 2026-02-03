@@ -19,7 +19,7 @@ struct ReaderSettingsPanelView: View {
   let onDisableOffline: () -> Void
   let offlineSubtitle: String?
   let offlineIsAvailable: Bool
-  @Binding var askAI: ReaderAskAIState
+  @ObservedObject var askAI: ReaderAskAIViewModel
 
   @State private var localDragOffset: CGFloat = 0
   @State private var screen: ReaderSettingsPanelScreen = .main
@@ -46,7 +46,7 @@ struct ReaderSettingsPanelView: View {
           onDisableOffline: onDisableOffline,
           offlineSubtitle: offlineSubtitle,
           offlineIsAvailable: offlineIsAvailable,
-          askAI: $askAI
+          askAI: askAI
         )
         .environmentObject(preferences)
       }

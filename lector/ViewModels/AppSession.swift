@@ -38,6 +38,9 @@ final class AppSession {
   func refreshFromKeychain() {
     let token = KeychainStore.getString(account: KeychainKeys.authToken) ?? ""
     let userID = KeychainStore.getString(account: KeychainKeys.userID) ?? ""
+    if !token.isEmpty {
+      print("🟠 [AppSession] JWT from Keychain (Supabase access_token): \(token)")
+    }
     isAuthenticated = !token.isEmpty && !userID.isEmpty
     #if canImport(Sentry)
       if isAuthenticated {
@@ -72,6 +75,8 @@ final class AppSession {
 
     do {
       let newSession = try await authService.refreshSession(refreshToken: refresh)
+      print(
+        "🟠 [AppSession] Session refreshed – JWT (Supabase access_token): \(newSession.accessToken)")
       KeychainStore.setString(newSession.accessToken, account: KeychainKeys.authToken)
       if let newRefresh = newSession.refreshToken, !newRefresh.isEmpty {
         KeychainStore.setString(newRefresh, account: KeychainKeys.refreshToken)
@@ -172,7 +177,9 @@ final class AppSession {
       && !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       && !urlString.contains(" ")
 
-    print("🟠 [AppSession] URL validation - scheme: \(scheme ?? "nil"), host: \(host), isValid: \(isValidForWebAuth)")
+    print(
+      "🟠 [AppSession] URL validation - scheme: \(scheme ?? "nil"), host: \(host), isValid: \(isValidForWebAuth)"
+    )
 
     guard isValidForWebAuth else {
       print("🔴 [AppSession] Invalid OAuth URL: \(urlString)")
@@ -204,7 +211,9 @@ final class AppSession {
         await handleOAuthCallback(callbackURL)
       } catch {
         print("🔴 [AppSession] OAuth error: \(error)")
-        print("🔴 [AppSession] Error description: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)")
+        print(
+          "🔴 [AppSession] Error description: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
+        )
         await MainActor.run {
           #if canImport(Sentry)
             let event = Event(error: error)
@@ -226,6 +235,8 @@ final class AppSession {
     Task {
       do {
         let session = try await authService.signInWithApple(idToken: idToken, nonce: nonce)
+        print(
+          "🟠 [AppSession] Sign in with Apple – JWT (Supabase access_token): \(session.accessToken)")
 
         KeychainStore.setString(session.accessToken, account: KeychainKeys.authToken)
         if let refresh = session.refreshToken, !refresh.isEmpty {
@@ -263,7 +274,9 @@ final class AppSession {
 
   func handleOAuthCallback(_ url: URL) async {
     print("🟠 [AppSession] handleOAuthCallback called with URL: \(url.absoluteString)")
-    print("🟠 [AppSession] URL scheme: \(url.scheme ?? "nil"), expected: \(SupabaseConfig.redirectScheme)")
+    print(
+      "🟠 [AppSession] URL scheme: \(url.scheme ?? "nil"), expected: \(SupabaseConfig.redirectScheme)"
+    )
     // Only handle our OAuth callback.
     guard url.scheme == SupabaseConfig.redirectScheme else {
       print("🔴 [AppSession] Callback URL scheme mismatch. Ignoring callback.")
@@ -285,6 +298,7 @@ final class AppSession {
       print("🟠 [AppSession] OAuth completed successfully")
       print("🟠 [AppSession] User ID: \(session.userID)")
       print("🟠 [AppSession] Has refresh token: \(session.refreshToken != nil)")
+      print("🟠 [AppSession] JWT (Supabase access_token): \(session.accessToken)")
       pkceVerifier = nil
 
       KeychainStore.setString(session.accessToken, account: KeychainKeys.authToken)
@@ -306,7 +320,9 @@ final class AppSession {
       await syncAccountStatus()
     } catch {
       print("🔴 [AppSession] Error completing OAuth: \(error)")
-      print("🔴 [AppSession] Error description: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)")
+      print(
+        "🔴 [AppSession] Error description: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
+      )
       pkceVerifier = nil
       #if canImport(Sentry)
         let event = Event(error: error)
