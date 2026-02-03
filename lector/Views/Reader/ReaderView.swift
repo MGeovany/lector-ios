@@ -20,6 +20,7 @@ struct ReaderView: View {
   @State private var search = ReaderSearchState()
   @State private var highlight = ReaderHighlightState()
   @State private var settings = ReaderSettingsState()
+  @StateObject private var askAI: ReaderAskAIViewModel
   @State private var chrome = ReaderChromeState()
   @State private var scroll = ReaderScrollState()
 
@@ -65,6 +66,7 @@ struct ReaderView: View {
     self.book = book
     self.onProgressChange = onProgressChange
     self.initialText = initialText
+    _askAI = StateObject(wrappedValue: ReaderAskAIViewModel(documentID: book.remoteID ?? ""))
   }
 
   var body: some View {
@@ -298,10 +300,13 @@ struct ReaderView: View {
                 onEnableOffline: enableOffline,
                 onDisableOffline: disableOffline,
                 offlineSubtitle: offlineSubtitle,
-                offlineIsAvailable: offlineIsAvailable
+                offlineIsAvailable: offlineIsAvailable,
+                askAI: askAI
               )
+              .transition(.move(edge: .bottom).combined(with: .opacity))
             }
           }
+
         }
 
         if showEdges, !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {
@@ -410,12 +415,18 @@ struct ReaderView: View {
       if focusEnabled, isPresented {
         cancelFocusAutoHide()
       }
+      if isPresented {
+        updateAskAIPageContext()
+      }
     }
+    .onChange(of: viewModel.currentIndex) { _, _ in updateAskAIPageContext() }
+    .onChange(of: viewModel.pages.count) { _, _ in updateAskAIPageContext() }
+    .onChange(of: scroll.progress) { _, _ in updateAskAIPageContext() }
     .onAppear {
       networkMonitor.startIfNeeded()
       #if DEBUG
         print(
-          "[ReaderView] onAppear readerStatusBarScheme=\(readerStatusBarScheme) appThemeColorScheme=\(appThemeColorScheme)"
+          "[ReaderView] onAppear docID=\(book.remoteID ?? "nil") readerStatusBarScheme=\(readerStatusBarScheme) appThemeColorScheme=\(appThemeColorScheme)"
         )
       #endif
       applyReaderStatusBarStyle(readerStatusBarScheme)
@@ -423,7 +434,8 @@ struct ReaderView: View {
         applyReaderStatusBarStyle(readerStatusBarScheme)
         #if DEBUG
           print(
-            "[ReaderView] onAppear delayed re-apply readerStatusBarScheme=\(readerStatusBarScheme)")
+            "[ReaderView] onAppear delayed re-apply docID=\(book.remoteID ?? "nil") readerStatusBarScheme=\(readerStatusBarScheme)"
+          )
         #endif
       }
       if let id = book.remoteID, !id.isEmpty {
@@ -451,22 +463,42 @@ struct ReaderView: View {
         }
       }
       audiobook.updatePages(viewModel.pages)
+      updateAskAIPageContext()
     }
     .onChange(of: readerStatusBarScheme, initial: true) { _, newScheme in
       #if DEBUG
         print(
-          "[ReaderView] onChange(readerStatusBarScheme) initial/change -> newScheme=\(newScheme)")
+          "[ReaderView] onChange(readerStatusBarScheme) docID=\(book.remoteID ?? "nil") initial/change -> newScheme=\(newScheme)"
+        )
       #endif
       applyReaderStatusBarStyle(newScheme)
     }
     .onDisappear {
       #if DEBUG
-        print("[ReaderView] onDisappear restoring appThemeColorScheme=\(appThemeColorScheme)")
+        print(
+          "[ReaderView] onDisappear docID=\(book.remoteID ?? "nil") restoring appThemeColorScheme=\(appThemeColorScheme)"
+        )
       #endif
       applyReaderStatusBarStyle(appThemeColorScheme)
       disableAudiobook()
       cancelFocusAutoHide()
       stopOfflineMonitor()
+    }
+  }
+
+  private func updateAskAIPageContext() {
+    let total = viewModel.pages.count
+    guard total > 0 else {
+      askAI.totalPages = nil
+      askAI.currentPage = nil
+      return
+    }
+    askAI.totalPages = total
+    if shouldUseContinuousScroll {
+      let idx = min(max(0, Int(round(scroll.progress * Double(total - 1)))), total - 1)
+      askAI.currentPage = idx + 1
+    } else {
+      askAI.currentPage = min(viewModel.currentIndex + 1, total)
     }
   }
 
@@ -493,13 +525,15 @@ struct ReaderView: View {
       let readerTheme = preferences.theme
       let appTheme = AppTheme(rawValue: appThemeRawValue) ?? .dark
       print(
-        "[ReaderView] applyReaderStatusBarStyle scheme=\(String(describing: scheme)) uiStyle=\(uiStyle.rawValue) readerTheme=\(readerTheme) appTheme=\(appTheme) windowsCount=\(windows.count) keyWindow=\(keyWindow != nil)"
+        "[ReaderView] applyReaderStatusBarStyle docID=\(book.remoteID ?? "nil") scheme=\(String(describing: scheme)) uiStyle=\(uiStyle.rawValue) readerTheme=\(readerTheme) appTheme=\(appTheme) windowsCount=\(windows.count) keyWindow=\(keyWindow != nil)"
       )
     #endif
 
     guard let window = keyWindow ?? windows.first else {
       #if DEBUG
-        print("[ReaderView] applyReaderStatusBarStyle FAILED: no window")
+        print(
+          "[ReaderView] applyReaderStatusBarStyle docID=\(book.remoteID ?? "nil") FAILED: no window"
+        )
       #endif
       return
     }
@@ -507,7 +541,7 @@ struct ReaderView: View {
     window.rootViewController?.overrideUserInterfaceStyle = uiStyle
     #if DEBUG
       print(
-        "[ReaderView] applyReaderStatusBarStyle SET window+rootVC.overrideUserInterfaceStyle=\(uiStyle.rawValue)"
+        "[ReaderView] applyReaderStatusBarStyle docID=\(book.remoteID ?? "nil") SET window+rootVC.overrideUserInterfaceStyle=\(uiStyle.rawValue)"
       )
     #endif
   }

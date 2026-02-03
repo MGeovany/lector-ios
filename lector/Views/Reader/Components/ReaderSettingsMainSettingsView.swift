@@ -157,7 +157,13 @@ struct ReaderSettingsMainSettingsView: View {
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
-      action: {}
+      action: {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+          // localDragOffset = 0
+          screen = .askAI
+
+        }
+      }
     )
   }
 

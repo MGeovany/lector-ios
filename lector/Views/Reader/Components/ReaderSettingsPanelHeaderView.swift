@@ -23,10 +23,6 @@ struct ReaderSettingsPanelHeaderView: View {
           }
         }
 
-      Text(title)
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(0.40))
-        .padding(.bottom, 20)
     }
     .contentShape(Rectangle())
     .highPriorityGesture(

@@ -17,6 +17,7 @@ struct ProfileView: View {
   @State private var showDeleteAccountConfirm: Bool = false
   @State private var showLogoutConfirm: Bool = false
   @State private var showAccountDeletedAlert: Bool = false
+  @State private var accountDeletionToast: ProfileToastData?
   @State private var showLoggedOutAlert: Bool = false
   @State private var usedBytes: Int64 = 0
   @State private var maxBytesOverride: Int64? = nil
@@ -306,6 +307,13 @@ struct ProfileView: View {
       } message: {
         Text("Local data cleared on this device.")
       }
+      .overlay(alignment: .top) {
+        if let accountDeletionToast {
+          ProfileToastView(toast: accountDeletionToast)
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+      }
     }
     .task(id: session.isAuthenticated) {
       await session.refreshProfileIfNeeded()
@@ -384,7 +392,19 @@ struct ProfileView: View {
         accountDisabled = true
         subscription.downgradeToFree()
         session.signOut()
-        // TODO: Show error alert to user (backend call failed, but local blocking applied)
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+          accountDeletionToast = ProfileToastData(
+            kind: .error,
+            message:
+              "We couldn’t reach the server. Your account is blocked on this device, but the deletion request wasn’t submitted."
+          )
+        }
+        Task { @MainActor in
+          try? await Task.sleep(nanoseconds: 3_000_000_000)
+          withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+            accountDeletionToast = nil
+          }
+        }
       }
     }
   }
@@ -517,6 +537,66 @@ struct ProfileView: View {
     let raw = session.profile?.displayName ?? ""
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? nil : trimmed
+  }
+}
+
+private struct ProfileToastData: Equatable {
+  enum Kind: Equatable {
+    case error
+
+    var iconName: String {
+      switch self {
+      case .error: return "xmark.octagon.fill"
+      }
+    }
+
+    var iconColor: Color {
+      switch self {
+      case .error: return .red
+      }
+    }
+  }
+
+  let kind: Kind
+  let message: String
+}
+
+private struct ProfileToastView: View {
+  let toast: ProfileToastData
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    HStack(spacing: 10) {
+      Image(systemName: toast.kind.iconName)
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundStyle(toast.kind.iconColor)
+
+      Text(toast.message)
+        .font(.parkinsans(size: CGFloat(13), weight: .semibold))
+        .foregroundStyle(textColor)
+        .lineLimit(2)
+        .multilineTextAlignment(.leading)
+
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 14)
+    .padding(.vertical, 10)
+    .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+    .overlay(
+      Capsule(style: .continuous)
+        .stroke(borderColor, lineWidth: 1)
+    )
+    .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.35 : 0.10), radius: 10, y: 6)
+    .padding(.horizontal, 18)
+    .accessibilityLabel(toast.message)
+  }
+
+  private var textColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.90) : AppColors.matteBlack.opacity(0.90)
+  }
+
+  private var borderColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.35)
   }
 }
 
