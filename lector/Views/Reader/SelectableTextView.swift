@@ -1,13 +1,17 @@
 import SwiftUI
 import UIKit
 
-/// A UIKit-backed selectable text view that exposes a custom "Share" menu item for the current selection.
 struct SelectableTextView: UIViewRepresentable {
   let text: String
   let font: UIFont
   let textColor: UIColor
   let lineSpacing: CGFloat
+  let textAlignment: NSTextAlignment
   let highlightQuery: String?
+  let highlightQuotes: [String]
+  let showHighlightsInText: Bool
+  let highlightColor: UIColor
+  let highlightOpacity: CGFloat
   let clearSelectionToken: Int
   let onShareSelection: (String) -> Void
 
@@ -22,20 +26,17 @@ struct SelectableTextView: UIViewRepresentable {
     uiView: ShareableSelectionTextView,
     context: Context
   ) -> CGSize {
-    // Use the proposed width, or fallback to the current bounds width, or a reasonable default
     let proposedWidth = proposal.width ?? (uiView.bounds.width > 0 ? uiView.bounds.width : 300)
     guard proposedWidth > 0 else { return CGSize(width: 0, height: 0) }
 
-    // Configure text container for full layout calculation
     uiView.textContainer.size = CGSize(width: proposedWidth, height: .greatestFiniteMagnitude)
     uiView.textContainer.widthTracksTextView = false
     uiView.textContainer.heightTracksTextView = false
 
-    // Ensure we have attributed text set
     if uiView.attributedText.length == 0 && !text.isEmpty {
-      // If text isn't set yet, create it temporarily for measurement
       let paragraph = NSMutableParagraphStyle()
       paragraph.lineSpacing = lineSpacing
+      paragraph.alignment = textAlignment
       paragraph.lineBreakMode = .byWordWrapping
       let attr = NSMutableAttributedString(
         string: text,
@@ -48,10 +49,7 @@ struct SelectableTextView: UIViewRepresentable {
       uiView.attributedText = attr
     }
 
-    // Force layout to calculate the full height
     uiView.layoutManager.ensureLayout(for: uiView.textContainer)
-
-    // Calculate the actual height needed for all text
     let usedRect = uiView.layoutManager.usedRect(for: uiView.textContainer)
     let height = ceil(usedRect.height)
 
@@ -70,9 +68,6 @@ struct SelectableTextView: UIViewRepresentable {
     v.isEditable = false
     v.isSelectable = true
     v.isScrollEnabled = false
-    // UITextView is a UIScrollView subclass. When embedded inside a parent SwiftUI ScrollView,
-    // its pan recognizer can compete with the parent's scroll gesture and effectively "pin"
-    // scrolling on short documents. We'll bias gesture recognition to the parent ScrollView.
     v.backgroundColor = .clear
     v.textContainerInset = .zero
     v.textContainer.lineFragmentPadding = 0
@@ -80,7 +75,6 @@ struct SelectableTextView: UIViewRepresentable {
     v.textContainer.heightTracksTextView = false
     v.adjustsFontForContentSizeCategory = true
 
-    // Make the view expand vertically to fit content
     v.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     v.setContentHuggingPriority(.defaultLow, for: .horizontal)
     v.setContentCompressionResistancePriority(.required, for: .vertical)
@@ -95,11 +89,8 @@ struct SelectableTextView: UIViewRepresentable {
 
   func updateUIView(_ uiView: ShareableSelectionTextView, context: Context) {
     uiView.onShareSelection = onShareSelection
-    // Prefer the parent SwiftUI ScrollView for vertical pans.
     uiView.lectorPreferParentScrollViewForPans(debug: Self.debugScrollLogs)
 
-    // If a parent (e.g. ReaderView) asks to clear selection (usually when showing a modal),
-    // remove the highlight + caret.
     if context.coordinator.lastClearSelectionToken != clearSelectionToken {
       context.coordinator.lastClearSelectionToken = clearSelectionToken
       uiView.selectedRange = NSRange(location: 0, length: 0)
@@ -108,6 +99,7 @@ struct SelectableTextView: UIViewRepresentable {
 
     let paragraph = NSMutableParagraphStyle()
     paragraph.lineSpacing = lineSpacing
+    paragraph.alignment = textAlignment
     paragraph.lineBreakMode = .byWordWrapping
 
     let attr = NSMutableAttributedString(
@@ -119,25 +111,35 @@ struct SelectableTextView: UIViewRepresentable {
       ]
     )
 
-    if let highlightQuery,
-      !highlightQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    {
-      let query = highlightQuery.lowercased()
-      let full = text.lowercased() as NSString
-      var range = NSRange(location: 0, length: full.length)
-      while true {
-        let found = full.range(of: query, options: [], range: range)
-        if found.location == NSNotFound { break }
-        attr.addAttribute(
-          .backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.35), range: found)
-        let nextLoc = found.location + max(1, found.length)
-        if nextLoc >= full.length { break }
-        range = NSRange(location: nextLoc, length: full.length - nextLoc)
+    if showHighlightsInText {
+      let bgColor = highlightColor.withAlphaComponent(highlightOpacity)
+      let full = text as NSString
+
+      for quote in highlightQuotes {
+        let trimmed = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { continue }
+        for range in Self.rangesOfQuote(trimmed, in: full) {
+          attr.addAttribute(.backgroundColor, value: bgColor, range: range)
+        }
+      }
+
+      if let highlightQuery,
+        !highlightQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      {
+        let query = highlightQuery.lowercased()
+        let fullLower = text.lowercased() as NSString
+        var range = NSRange(location: 0, length: fullLower.length)
+        while true {
+          let found = fullLower.range(of: query, options: [], range: range)
+          if found.location == NSNotFound { break }
+          attr.addAttribute(.backgroundColor, value: highlightColor.withAlphaComponent(highlightOpacity), range: found)
+          let nextLoc = found.location + max(1, found.length)
+          if nextLoc >= fullLower.length { break }
+          range = NSRange(location: nextLoc, length: fullLower.length - nextLoc)
+        }
       }
     }
 
-    // Update when either the string OR styling changes (theme/font/spacing).
-    // Preserve selection when possible.
     if uiView.attributedText != attr {
       let currentSelection = uiView.selectedRange
       uiView.attributedText = attr
@@ -151,13 +153,11 @@ struct SelectableTextView: UIViewRepresentable {
       uiView.invalidateIntrinsicContentSize()
     }
 
-    // Configure text container for proper layout
     let containerWidth = max(1, uiView.bounds.width > 0 ? uiView.bounds.width : 300)
     uiView.textContainer.size = CGSize(width: containerWidth, height: .greatestFiniteMagnitude)
     uiView.textContainer.widthTracksTextView = false
     uiView.textContainer.heightTracksTextView = false
 
-    // Force layout update
     uiView.layoutManager.ensureLayout(for: uiView.textContainer)
     uiView.invalidateIntrinsicContentSize()
     uiView.setNeedsLayout()
@@ -168,6 +168,80 @@ struct SelectableTextView: UIViewRepresentable {
         "[SelectableTextView] update bounds=\(uiView.bounds.size) attrLen=\(uiView.attributedText.length) scrollEnabled=\(uiView.isScrollEnabled)"
       )
     }
+  }
+
+  /// Finds all ranges of `quote` in `full` using case/diacritic-insensitive match, flexible whitespace regex, or longest substring when quote spans pages.
+  private static func rangesOfQuote(_ quote: String, in full: NSString) -> [NSRange] {
+    guard !quote.isEmpty, full.length > 0 else { return [] }
+    let trimmed = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return [] }
+    var out = rangesOfQuoteExact(trimmed, in: full)
+    if !out.isEmpty { return out }
+    out = rangesOfQuoteFlexibleWhitespace(trimmed, in: full)
+    if !out.isEmpty { return out }
+    return rangesOfQuoteLongestSubstring(trimmed, in: full)
+  }
+
+  private static func rangesOfQuoteExact(_ quote: String, in full: NSString) -> [NSRange] {
+    var out: [NSRange] = []
+    let opts: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+    var searchRange = NSRange(location: 0, length: full.length)
+    while searchRange.length > 0 {
+      let found = full.range(of: quote, options: opts, range: searchRange)
+      if found.location == NSNotFound { break }
+      out.append(found)
+      let nextLoc = found.location + max(1, found.length)
+      if nextLoc >= full.length { break }
+      searchRange = NSRange(location: nextLoc, length: full.length - nextLoc)
+    }
+    return out
+  }
+
+  private static func rangesOfQuoteFlexibleWhitespace(_ quote: String, in full: NSString) -> [NSRange] {
+    let collapsed = quote.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !collapsed.isEmpty else { return [] }
+    let pattern = NSRegularExpression.escapedPattern(for: collapsed)
+      .replacingOccurrences(of: " ", with: "\\s+")
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return [] }
+    var out: [NSRange] = []
+    let range = NSRange(location: 0, length: full.length)
+    regex.enumerateMatches(in: full as String, options: [], range: range) { match, _, _ in
+      guard let m = match else { return }
+      out.append(m.range)
+    }
+    return out
+  }
+
+  /// When the full quote spans pages, highlight the longest prefix or suffix of the quote that appears on this page.
+  private static func rangesOfQuoteLongestSubstring(_ quote: String, in full: NSString) -> [NSRange] {
+    let opts: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+    let words = quote.split(separator: " ", omittingEmptySubsequences: false)
+      .map(String.init)
+    guard !words.isEmpty else { return [] }
+    let maxWords = min(25, words.count)
+    func trySubstring(_ substring: String) -> [NSRange]? {
+      let t = substring.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard t.count >= 2 else { return nil }
+      var out: [NSRange] = []
+      var searchRange = NSRange(location: 0, length: full.length)
+      while searchRange.length > 0 {
+        let found = full.range(of: t, options: opts, range: searchRange)
+        if found.location == NSNotFound { break }
+        out.append(found)
+        searchRange = NSRange(location: found.location + max(1, found.length), length: full.length - (found.location + max(1, found.length)))
+      }
+      return out.isEmpty ? nil : out
+    }
+    for len in (1 ... maxWords).reversed() {
+      let prefix = words.prefix(len).joined(separator: " ")
+      if let ranges = trySubstring(prefix) { return ranges }
+      if len < words.count {
+        let suffix = words.suffix(len).joined(separator: " ")
+        if let ranges = trySubstring(suffix) { return ranges }
+      }
+    }
+    return []
   }
 }
 
@@ -189,14 +263,11 @@ extension UIView {
 
 extension UITextView {
   fileprivate func lectorPreferParentScrollViewForPans(debug: Bool) {
-    // Find the nearest ancestor scroll view (the SwiftUI ScrollView host).
     guard let parent = self.lectorNearestAncestorScrollView(excludingSelf: true) else {
       if debug { print("[SelectableTextView] no parent UIScrollView ancestor found") }
       return
     }
 
-    // Make our internal pan wait for the parent scroll view's pan. This preserves text selection
-    // (long-press/tap) while ensuring vertical drags scroll the document.
     panGestureRecognizer.require(toFail: parent.panGestureRecognizer)
     panGestureRecognizer.cancelsTouchesInView = false
 
@@ -215,8 +286,6 @@ final class ShareableSelectionTextView: UITextView {
 
   @available(iOS 16.0, *)
   override func editMenu(for textRange: UITextRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
-    // This is the API used by the modern iOS 16+ selection "pill" menu.
-    // `buildMenu(with:)` won't be called for this UI.
     guard
       let selected = text(in: textRange)?
         .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -229,18 +298,13 @@ final class ShareableSelectionTextView: UITextView {
       title: "Share highlight",
       image: UIImage(systemName: "square.and.arrow.up")
     ) { [weak self] _ in
-
-      // IMPORTANT: use the provided `textRange` content. By the time the action executes,
-      // `selectedTextRange` can already be cleared by the system menu.
       self?.onShareSelection?(selected)
     }
 
-    // Put our action at the front, keep the system actions after it.
     return UIMenu(children: [share] + suggestedActions)
   }
 
   override var intrinsicContentSize: CGSize {
-    // Calculate intrinsic size based on text content
     guard attributedText.length > 0 else {
       return CGSize(width: UIView.noIntrinsicMetric, height: 1)
     }
@@ -258,7 +322,6 @@ final class ShareableSelectionTextView: UITextView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    // Invalidate intrinsic content size when bounds change
     if bounds.width > 0 {
       invalidateIntrinsicContentSize()
     }
@@ -267,9 +330,7 @@ final class ShareableSelectionTextView: UITextView {
   override func buildMenu(with builder: UIMenuBuilder) {
     super.buildMenu(with: builder)
 
-    // Only add share menu if there's a selection
     guard selectedRange.length > 0 else { return }
-    // Capture selection now; `selectedTextRange` can change after the menu is built.
     let selectedNow: String? = {
       guard let range = selectedTextRange, let selected = text(in: range) else { return nil }
       let trimmed = selected.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -284,13 +345,11 @@ final class ShareableSelectionTextView: UITextView {
       self?.onShareSelection?(selectedNow)
     }
 
-    // Insert the share menu at the start of the edit menu
     let menu = UIMenu(title: "", options: .displayInline, children: [share])
     builder.insertChild(menu, atStartOfMenu: .edit)
   }
 
   override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-    // Ensure standard text selection actions work
     if action == #selector(copy(_:)) {
       return selectedRange.length > 0
     }
@@ -298,7 +357,6 @@ final class ShareableSelectionTextView: UITextView {
   }
 
   override func becomeFirstResponder() -> Bool {
-    // Ensure the view can become first responder for menu display
     return super.becomeFirstResponder()
   }
 

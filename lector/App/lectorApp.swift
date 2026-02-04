@@ -13,6 +13,7 @@ import SwiftUI
 
 @main
 struct lectorApp: App {
+  @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
   @StateObject private var preferences = PreferencesViewModel()
   @StateObject private var subscription = SubscriptionStore()
 

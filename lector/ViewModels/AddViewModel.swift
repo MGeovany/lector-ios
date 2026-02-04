@@ -6,6 +6,7 @@ import Observation
 final class AddViewModel {
   private(set) var isUploading: Bool = false
   var alertMessage: String?
+  var infoMessage: String?
   var didUploadSuccessfully: Bool = false
 
   private let documentsService: DocumentsServicing
@@ -26,6 +27,18 @@ final class AddViewModel {
 
     do {
       let pdfData = try Self.readSecurityScopedFile(url)
+
+      // If offline, queue the upload locally.
+      if !NetworkMonitor.shared.isOnline {
+        _ = try PendingUploadsStore.enqueue(
+          pdfData: pdfData,
+          fileName: url.lastPathComponent.isEmpty ? "document.pdf" : url.lastPathComponent
+        )
+        infoMessage = "You're offline. Your book will be uploaded and processed once you're back online."
+        NotificationCenter.default.post(name: .documentsDidChange, object: nil)
+        return
+      }
+
       try await validateQuotaAndSize(nextFileBytes: Int64(pdfData.count))
 
       _ = try await documentsService.uploadDocument(
@@ -37,6 +50,26 @@ final class AddViewModel {
       NotificationCenter.default.post(name: .documentsDidChange, object: nil)
     } catch {
       alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to upload document."
+    }
+  }
+
+  func flushPendingUploadsIfPossible() async {
+    guard NetworkMonitor.shared.isOnline else { return }
+    let pending = PendingUploadsStore.list()
+    guard !pending.isEmpty else { return }
+
+    for item in pending {
+      do {
+        let data = try PendingUploadsStore.loadPDFData(id: item.id)
+        // Best-effort: quota check.
+        try await validateQuotaAndSize(nextFileBytes: Int64(data.count))
+        _ = try await documentsService.uploadDocument(pdfData: data, fileName: item.fileName)
+        PendingUploadsStore.remove(id: item.id)
+        NotificationCenter.default.post(name: .documentsDidChange, object: nil)
+      } catch {
+        // Stop on first failure; try again later.
+        return
+      }
     }
   }
 
@@ -100,4 +133,3 @@ final class AddViewModel {
 extension Notification.Name {
   static let documentsDidChange = Notification.Name("documentsDidChange")
 }
-

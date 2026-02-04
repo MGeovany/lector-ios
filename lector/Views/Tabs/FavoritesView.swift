@@ -12,6 +12,7 @@ struct FavoritesView: View {
   @State private var query: String = ""
   @State private var selectedBook: Book?
   @State private var viewModel: HomeViewModel
+  @StateObject private var networkMonitor = NetworkMonitor.shared
 
   init(viewModel: HomeViewModel? = nil) {
     let vm = viewModel ?? HomeViewModel()
@@ -45,6 +46,7 @@ struct FavoritesView: View {
         )
       }
       .onAppear { viewModel.onAppear() }
+      .onAppear { networkMonitor.startIfNeeded() }
     }
   }
 

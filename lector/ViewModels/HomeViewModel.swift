@@ -16,6 +16,7 @@ final class HomeViewModel {
   private let documentsService: DocumentsServicing
   private let readingPositionService: ReadingPositionServicing
   private let userID: String
+  private let indexStore = DocumentsIndexStore()
   private var didLoadOnce: Bool = false
   @ObservationIgnored private var documentsChangedObserver: NSObjectProtocol?
   @ObservationIgnored private var pendingReadingPositionTasks: [String: Task<Void, Never>] = [:]
@@ -58,6 +59,74 @@ final class HomeViewModel {
     isLoading = true
     defer { isLoading = false }
 
+    // Offline-first: show local index immediately.
+    let cached = indexStore.load()
+    if !cached.isEmpty {
+      let baseBooks = cached.map { summary in
+        let pending = PendingReadingPositionStore.get(documentID: summary.id)
+        let currentPage = pending.map { $0.pageNumber } ?? summary.currentPage
+        let readingProgress = pending?.progress ?? summary.readingProgress
+        let pagesTotal = max(1, summary.pagesTotal, currentPage)
+        return Book(
+          id: UUID(uuidString: summary.id) ?? UUID(),
+          remoteID: summary.id,
+          title: summary.title,
+          author: summary.author,
+          pagesTotal: pagesTotal,
+          currentPage: min(currentPage, pagesTotal),
+          readingProgress: readingProgress,
+          sizeBytes: summary.sizeBytes,
+          lastOpenedAt: pending?.updatedAt ?? summary.updatedAt,
+          lastOpenedDaysAgo: max(
+            0,
+            Calendar.current.dateComponents(
+              [.day], from: pending?.updatedAt ?? summary.updatedAt, to: Date()
+            ).day ?? 0
+          ),
+          isRead: (currentPage >= pagesTotal && pagesTotal > 0),
+          isFavorite: summary.isFavorite,
+          tags: summary.tag.map { [$0] } ?? []
+        )
+      }
+
+      switch filter {
+      case .recents:
+        books = baseBooks.sorted { $0.lastOpenedSortDate > $1.lastOpenedSortDate }
+      case .all, .read:
+        books = baseBooks.sorted {
+          $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+      }
+    }
+
+    // Add any queued uploads as local-only placeholders.
+    let queued = PendingUploadsStore.list()
+    if !queued.isEmpty {
+      let queuedBooks: [Book] = queued.map { item in
+        Book(
+          id: UUID(uuidString: item.id) ?? UUID(),
+          remoteID: nil,
+          title: item.fileName.replacingOccurrences(
+            of: ".pdf", with: "", options: [.caseInsensitive]),
+          author: "Queued",
+          pagesTotal: 1,
+          currentPage: 1,
+          readingProgress: nil,
+          sizeBytes: 0,
+          lastOpenedAt: item.createdAt,
+          lastOpenedDaysAgo: 0,
+          isRead: false,
+          isFavorite: false,
+          tags: ["Book"]
+        )
+      }
+      books = queuedBooks + books
+    }
+
+    guard NetworkMonitor.shared.isOnline else {
+      return
+    }
+
     do {
       let docs: [RemoteDocument]
       switch filter {
@@ -66,11 +135,38 @@ final class HomeViewModel {
       case .all, .read:
         docs = try await documentsService.getDocumentsByUserID(userID)
       }
-      let next =
+      var next =
         docs
         .map(Book.init(remoteDocument:))
         .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+      for i in next.indices {
+        guard let rid = next[i].remoteID, !rid.isEmpty else { continue }
+        if let pending = PendingReadingPositionStore.get(documentID: rid) {
+          next[i].pagesTotal = max(1, next[i].pagesTotal, pending.pageNumber)
+          next[i].currentPage = min(pending.pageNumber, next[i].pagesTotal)
+          next[i].readingProgress = pending.progress
+          next[i].isRead = pending.pageNumber >= next[i].pagesTotal && next[i].pagesTotal > 0
+        }
+      }
       books = next
+
+      // Persist metadata for offline-first browsing.
+      indexStore.save(from: docs)
+      // Never keep non-pinned optimized payloads on disk.
+      OptimizedPagesStore.pruneUnpinned()
+      // Sync pending reading positions saved while offline; remove from local store once on server.
+      for pending in PendingReadingPositionStore.list() {
+        do {
+          try await readingPositionService.updateReadingPosition(
+            documentID: pending.documentID,
+            pageNumber: pending.pageNumber,
+            progress: pending.progress
+          )
+          PendingReadingPositionStore.remove(documentID: pending.documentID)
+        } catch {
+          // Keep in store for next sync.
+        }
+      }
     } catch {
       // If we already have content, avoid blocking the UX with an alert on transient network failures
       // (e.g. pull-to-refresh while offline). Keep existing books visible.
@@ -309,8 +405,10 @@ final class HomeViewModel {
           pageNumber: pageNumber,
           progress: progress
         )
+        PendingReadingPositionStore.remove(documentID: remoteID)
       } catch {
-        // Non-blocking: keep UX smooth even if the backend fails.
+        PendingReadingPositionStore.save(
+          documentID: remoteID, pageNumber: pageNumber, progress: progress)
       }
     }
   }

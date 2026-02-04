@@ -70,7 +70,7 @@ struct PreferencesView: View {
               }
 
               PreferenceSectionCard(
-                icon: "scroll",
+                icon: "text.book.closed.fill",
                 title: "Reading",
                 subtitle:
                   "This will enable continuous scroll for short documents."
@@ -81,6 +81,48 @@ struct PreferencesView: View {
                 )
                 .font(.parkinsansSemibold(size: 13))
                 .tint(preferencesAccent)
+              }
+
+              PreferenceSectionCard(
+                icon: "highlighter",
+                title: "Highlights",
+                subtitle: "Show search matches in the text and choose their color."
+              ) {
+                VStack(alignment: .leading, spacing: 12) {
+                  Toggle("Show highlights in text", isOn: $viewModel.showHighlightsInText)
+                    .font(.parkinsansSemibold(size: 13))
+                    .tint(preferencesAccent)
+
+                  HStack(spacing: 8) {
+                    Text("Color")
+                      .font(.parkinsans(size: 13, weight: .medium))
+                      .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.75) : AppColors.matteBlack.opacity(0.75))
+                    Spacer(minLength: 8)
+                    HStack(spacing: 8) {
+                      ForEach(ReadingHighlightColor.allCases) { color in
+                        Button {
+                          viewModel.highlightColor = color
+                        } label: {
+                          Circle()
+                            .fill(color.color)
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                              Circle()
+                                .stroke(
+                                  viewModel.highlightColor == color
+                                    ? (colorScheme == .dark ? Color.white.opacity(0.5) : AppColors.matteBlack.opacity(0.4))
+                                    : Color.clear,
+                                  lineWidth: 2.5
+                                )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text(color.title))
+                        .accessibilityAddTraits(viewModel.highlightColor == color ? .isSelected : [])
+                      }
+                    }
+                  }
+                }
               }
 
               Button(role: .destructive, action: viewModel.restoreDefaults) {
@@ -106,6 +148,7 @@ struct PreferencesView: View {
                 )
               }
               .buttonStyle(.plain)
+              .padding(.bottom, 24)
             }
             .padding(.horizontal, 18)
             .padding(.top, 10)
@@ -128,6 +171,12 @@ struct PreferencesView: View {
         viewModel.save()
       }
       .onChange(of: viewModel.continuousScrollForShortDocs) { _, _ in
+        viewModel.save()
+      }
+      .onChange(of: viewModel.showHighlightsInText) { _, _ in
+        viewModel.save()
+      }
+      .onChange(of: viewModel.highlightColor) { _, _ in
         viewModel.save()
       }
     }

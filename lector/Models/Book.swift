@@ -82,8 +82,21 @@ struct Book: Identifiable, Hashable {
   }
 
   var progress: Double {
-    if let readingProgress { return min(1.0, max(0.0, readingProgress)) }
-    guard pagesTotal > 0 else { return 0 }
-    return min(1.0, max(0.0, Double(currentPage) / Double(pagesTotal)))
+    let pageProgress: Double = {
+      guard pagesTotal > 0 else { return 0 }
+      return min(1.0, max(0.0, Double(currentPage) / Double(pagesTotal)))
+    }()
+
+    // Some backends can return inconsistent progress (e.g. 1.0) while page_number is 1.
+    // For UI display, prefer the page-based value when they disagree significantly.
+    if let readingProgress {
+      let rp = min(1.0, max(0.0, readingProgress))
+      if pagesTotal > 1, currentPage < pagesTotal, rp > pageProgress + 0.05 {
+        return pageProgress
+      }
+      return rp
+    }
+
+    return pageProgress
   }
 }

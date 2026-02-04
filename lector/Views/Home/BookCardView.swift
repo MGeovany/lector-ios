@@ -3,6 +3,7 @@ import SwiftUI
 struct BookCardView: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(HomeViewModel.self) private var homeViewModel
+  @StateObject private var networkMonitor = NetworkMonitor.shared
   let book: Book
   let onOpen: () -> Void
   let onToggleRead: () -> Void
@@ -16,25 +17,56 @@ struct BookCardView: View {
     let documentKey = BookCardColorStore.documentKey(for: book)
     let backgroundColor = BookCardColorStore.get(for: documentKey).color(for: colorScheme)
 
+    let isOfflineBlocked: Bool = {
+      // When offline, only allow opening books that have a local optimized copy.
+      guard !networkMonitor.isOnline else { return false }
+      guard let remoteID = book.remoteID, !remoteID.isEmpty else { return false }
+      return !OptimizedPagesStore.hasLocalCopy(remoteID: remoteID)
+    }()
+
+    let isPendingUpload: Bool = {
+      // Local-only placeholder for queued uploads.
+      return book.remoteID == nil && book.author == "Queued"
+    }()
+
+    let tagText: String? =
+      (book.tags.first?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap {
+        $0.isEmpty ? nil : $0
+      }
+
     VStack(alignment: .leading, spacing: 14) {
       HStack(alignment: .top, spacing: 14) {
         // cover
 
         VStack(alignment: .leading, spacing: 6) {
-          if !book.tags.isEmpty, let tag = book.tags.first {
-            Text(tag)
-              .font(.parkinsans(size: 12))
-              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.65) : .secondary)
-              .padding(.horizontal, 8)
-              .padding(.vertical, 4)
-              .background(
-                Capsule(style: .continuous)
-                  .fill(
-                    colorScheme == .dark
-                      ? Color.white.opacity(0.10) : Color(.secondarySystemBackground))
-              )
-              .padding(.bottom, 2)
+          HStack(spacing: 8) {
+            if let tagText {
+              Text(tagText)
+                .font(.parkinsans(size: 12))
+                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.65) : .secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                  Capsule(style: .continuous)
+                    .fill(
+                      colorScheme == .dark
+                        ? Color.white.opacity(0.10) : Color(.secondarySystemBackground))
+                )
+            }
+
+            if isPendingUpload {
+              offlineBadge(text: "Queued", systemImage: "clock")
+            } else if !networkMonitor.isOnline {
+              if let remoteID = book.remoteID, !remoteID.isEmpty,
+                OptimizedPagesStore.hasLocalCopy(remoteID: remoteID)
+              {
+                offlineBadge(text: "Offline", systemImage: "wifi")
+              } else {
+                offlineBadge(text: "Not offline", systemImage: "wifi.slash")
+              }
+            }
           }
+          .padding(.bottom, 2)
 
           Text(book.title.uppercased())
             .font(.parkinsansMedium(size: 42))
@@ -189,7 +221,15 @@ struct BookCardView: View {
         )
     )
     .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-    .onTapGesture(perform: onOpen)
+    .opacity(isOfflineBlocked ? 0.55 : 1)
+    .onTapGesture {
+      guard !isOfflineBlocked else { return }
+      guard !isPendingUpload else { return }
+      onOpen()
+    }
+    .onAppear {
+      networkMonitor.startIfNeeded()
+    }
     .alert("Create tag", isPresented: $isShowingCreateTag) {
       TextField("Tag name", text: $newTagName)
       Button("Cancel", role: .cancel) {
@@ -250,6 +290,19 @@ struct BookCardView: View {
     } message: {
       Text("This will permanently delete it from your library.")
     }
+  }
+
+  private func offlineBadge(text: String, systemImage: String) -> some View {
+    HStack(spacing: 6) {
+      Image(systemName: systemImage)
+        .font(.system(size: 11, weight: .semibold))
+      Text(text)
+        .font(.parkinsans(size: 12))
+    }
+    .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.70) : Color.black.opacity(0.55))
+    .padding(.horizontal, 8)
+    .padding(.vertical, 4)
+    .background(.ultraThinMaterial, in: Capsule(style: .continuous))
   }
 
   /*   private var cover: some View {

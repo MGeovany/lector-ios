@@ -8,6 +8,7 @@ struct HomeView: View {
   @State private var showFilePicker: Bool = false
   @State private var pickedURL: URL?
   @State private var toast: UploadToastData?
+  @StateObject private var networkMonitor = NetworkMonitor.shared
 
   init(viewModel: HomeViewModel? = nil) {
     _viewModel = State(initialValue: viewModel ?? HomeViewModel())
@@ -24,11 +25,16 @@ struct HomeView: View {
             HomeHeaderView(
               searchText: $viewModel.searchQuery,
               onAddTapped: {
-                print("🔵 [HomeView] HomeHeaderView add button tapped")
-                print("🔵 [HomeView] showFilePicker before: \(showFilePicker)")
                 showFilePicker = true
-                print("🔵 [HomeView] showFilePicker after: \(showFilePicker)")
               })
+
+            if !networkMonitor.isOnline {
+              Text("Offline — showing cached library.")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 8)
+            }
 
             // Filter buttons: Recents, All, Read
             // (Temporarily hidden per design review; keep logic intact.)
@@ -55,10 +61,7 @@ struct HomeView: View {
               EmptyLibraryPlaceholderView(
                 colorScheme: colorScheme,
                 onAddTapped: {
-                  print("🟢 [HomeView] EmptyLibraryPlaceholderView add button tapped")
-                  print("🟢 [HomeView] showFilePicker before: \(showFilePicker)")
                   showFilePicker = true
-                  print("🟢 [HomeView] showFilePicker after: \(showFilePicker)")
                 }
               )
               .padding(.top, 22)
@@ -115,29 +118,22 @@ struct HomeView: View {
       .onAppear { viewModel.onAppear() }
       .environment(viewModel)
     }
+    .onAppear {
+      networkMonitor.startIfNeeded()
+    }
     .fileImporter(
       isPresented: $showFilePicker,
       allowedContentTypes: [UTType.pdf],
       allowsMultipleSelection: false
     ) { result in
-      print("🟡 [HomeView] fileImporter result received")
-      print("🟡 [HomeView] showFilePicker value: \(showFilePicker)")
       switch result {
       case .success(let urls):
-        print("🟡 [HomeView] fileImporter success, urls count: \(urls.count)")
         if let url = urls.first {
-          print("🟡 [HomeView] Starting upload for URL: \(url)")
           Task { await addViewModel.uploadPickedPDF(url) }
-        } else {
-          print("🟡 [HomeView] No URL found in urls array")
         }
       case .failure(let error):
-        print("🔴 [HomeView] fileImporter error: \(error.localizedDescription)")
         viewModel.alertMessage = error.localizedDescription
       }
-    }
-    .onChange(of: showFilePicker) { _, newValue in
-      print("🟣 [HomeView] showFilePicker changed to: \(newValue)")
     }
     .overlay(alignment: .top) {
       // Subtle, non-blocking loading indicator.
@@ -190,6 +186,21 @@ struct HomeView: View {
         withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
       }
     }
+    .onChange(of: addViewModel.infoMessage) { _, msg in
+      let trimmed = (msg ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !trimmed.isEmpty else { return }
+      withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+        toast = UploadToastData(kind: .info, message: trimmed)
+      }
+      addViewModel.infoMessage = nil
+      Task { @MainActor in
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
+      }
+    }
+    .onAppear {
+      Task { await addViewModel.flushPendingUploadsIfPossible() }
+    }
   }
 
   private var background: some View {
@@ -240,9 +251,7 @@ private struct EmptyLibraryPlaceholderView: View {
           .padding(.horizontal, 14)
 
         Button {
-          print("🟢 [EmptyLibraryPlaceholderView] Add File button tapped")
           onAddTapped()
-          print("🟢 [EmptyLibraryPlaceholderView] onAddTapped called")
         } label: {
           HStack(spacing: 10) {
             Text("Add File")
@@ -315,11 +324,13 @@ private struct UploadToastData: Equatable {
   enum Kind: Equatable {
     case success
     case error
+    case info
 
     var iconName: String {
       switch self {
       case .success: return "checkmark.circle.fill"
       case .error: return "xmark.octagon.fill"
+      case .info: return "clock.badge.checkmark"
       }
     }
 
@@ -327,6 +338,7 @@ private struct UploadToastData: Equatable {
       switch self {
       case .success: return .green
       case .error: return .red
+      case .info: return .blue
       }
     }
   }

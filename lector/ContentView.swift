@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+/// App-level theme (Settings / Profile): applies to the whole app. Reader view overrides status bar while visible, then restores this.
 struct ContentView: View {
   @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
   @AppStorage(AppPreferenceKeys.accountDisabled) private var accountDisabled: Bool = false

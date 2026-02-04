@@ -43,14 +43,110 @@ final class ReaderViewModel: ObservableObject {
       return
     }
 
+    // Offline-first: prefer cached optimized pages.
+    if let cached = OptimizedPagesStore.loadPages(remoteID: id, expectedChecksum: nil), !cached.isEmpty {
+      setPages(cached, initialPage: book.currentPage)
+
+      // If the user pinned this doc for offline, refresh in background when possible.
+      if OfflinePinStore.isPinned(remoteID: id) {
+        let savedChecksum = OptimizedPagesStore.loadManifest(remoteID: id)?.optimizedChecksumSHA256
+        Task {
+          if let opt = try? await documentsService.getOptimizedDocument(id: id),
+            opt.processingStatus == "ready",
+            let nextChecksum = opt.optimizedChecksumSHA256,
+            let pages = opt.pages,
+            !pages.isEmpty,
+            savedChecksum != nextChecksum
+          {
+            try? OptimizedPagesStore.savePages(
+              remoteID: id,
+              pages: pages,
+              optimizedVersion: opt.optimizedVersion,
+              optimizedChecksumSHA256: opt.optimizedChecksumSHA256
+            )
+          }
+        }
+      }
+      return
+    }
+
     isLoading = true
     loadErrorMessage = nil
-    // Show a deterministic loading state while fetching remote content.
-    // (If fetch returns no content, we replace this with `emptyRemoteMessage`.)
-    setPages(["Loading…"], initialPage: 1)
-    defer { isLoading = false }
+
+    // Safety: update subtitle if the spinner takes too long.
+    let watchdog = Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 6_000_000_000)
+      if self.isLoading, (self.loadErrorMessage ?? "").isEmpty {
+        self.loadErrorMessage = "Still working…"
+      }
+    }
 
     do {
+      // Prefer optimized offline-first payload.
+      // Backend may return partial pages while still `processing`.
+      var opt = try await documentsService.getOptimizedDocument(id: id)
+
+      if let pages = opt.pages, !pages.isEmpty {
+        setPages(pages, initialPage: book.currentPage)
+        isLoading = false
+        loadErrorMessage = nil
+        watchdog.cancel()
+        if OfflinePinStore.isPinned(remoteID: id) {
+          try? OptimizedPagesStore.savePages(
+            remoteID: id,
+            pages: pages,
+            optimizedVersion: opt.optimizedVersion,
+            optimizedChecksumSHA256: opt.optimizedChecksumSHA256
+          )
+        }
+        return
+      }
+
+      if opt.processingStatus == "failed" {
+        loadErrorMessage = "Failed to process."
+        isLoading = false
+        watchdog.cancel()
+        setPages([""], initialPage: 1)
+        return
+      }
+
+      if opt.processingStatus != "ready" {
+        loadErrorMessage = "Preparing your document…"
+        let maxWaitSeconds: Int = 12
+        let intervalSeconds: Int = 2
+        var waited: Int = 0
+
+        while opt.processingStatus != "ready", opt.processingStatus != "failed", waited < maxWaitSeconds {
+          try? await Task.sleep(nanoseconds: UInt64(intervalSeconds) * 1_000_000_000)
+          waited += intervalSeconds
+          loadErrorMessage = "Preparing your document…"
+          if let next = try? await documentsService.getOptimizedDocument(id: id) {
+            opt = next
+          }
+          if let pages = opt.pages, !pages.isEmpty {
+            setPages(pages, initialPage: book.currentPage)
+            isLoading = false
+            loadErrorMessage = nil
+            watchdog.cancel()
+            return
+          }
+        }
+
+        if opt.processingStatus == "failed" {
+          loadErrorMessage = "Failed to process."
+          isLoading = false
+          watchdog.cancel()
+          setPages([""], initialPage: 1)
+          return
+        }
+
+        // Keep the loader up; backend continues processing.
+        loadErrorMessage = "Still preparing…"
+        watchdog.cancel()
+        return
+      }
+
+      // Fallback (older docs/backends): fetch full content and paginate.
       let doc = try await documentsService.getDocument(id: id)
       // Prefer backend page boundaries to match the web reader exactly.
       // If blocks don't have meaningful page numbers, fall back to local pagination.
@@ -59,6 +155,8 @@ final class ReaderViewModel: ObservableObject {
         || (pagesByBackend.first?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
       {
         setPages(pagesByBackend, initialPage: book.currentPage)
+        isLoading = false
+        watchdog.cancel()
         return
       }
 
@@ -69,14 +167,43 @@ final class ReaderViewModel: ObservableObject {
       if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         loadErrorMessage = nil
         setPages([emptyRemoteMessage], initialPage: 1)
+        isLoading = false
+        watchdog.cancel()
         return
       }
 
       let paged = TextPaginator.paginate(text: text, containerSize: containerSize, style: style)
       setPages(paged, initialPage: book.currentPage)
+      isLoading = false
+      watchdog.cancel()
     } catch {
-      loadErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to load document."
-      setPages([""], initialPage: 1)
+      if let cached = OptimizedPagesStore.loadPages(remoteID: id, expectedChecksum: nil), !cached.isEmpty {
+        setPages(cached, initialPage: book.currentPage)
+        loadErrorMessage = nil
+        isLoading = false
+        watchdog.cancel()
+        return
+      }
+      let isDownloaded = OptimizedPagesStore.hasLocalCopy(remoteID: id)
+      if OfflinePinStore.isPinned(remoteID: id), !isDownloaded {
+        loadErrorMessage = "Not downloaded"
+        setPages(
+          [
+            "This book isn't available offline yet. Turn on Offline while the server is reachable, then try again.",
+          ],
+          initialPage: 1
+        )
+      } else {
+        loadErrorMessage = "Can't connect"
+        setPages(
+          [
+            "Couldn't reach the server to load this book. Check your connection and try again.",
+          ],
+          initialPage: 1
+        )
+      }
+      isLoading = false
+      watchdog.cancel()
     }
   }
 
