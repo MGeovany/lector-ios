@@ -147,7 +147,7 @@ final class APIClient {
     let config = URLSessionConfiguration.ephemeral
     config.waitsForConnectivity = false
     config.timeoutIntervalForRequest = 20
-    config.timeoutIntervalForResource = 30
+    // Leave timeoutIntervalForResource at default so large transfers (PDF upload, optimized doc download) can complete on slow networks.
     return URLSession(configuration: config)
   }()
 
