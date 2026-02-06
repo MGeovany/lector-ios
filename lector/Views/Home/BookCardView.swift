@@ -8,10 +8,27 @@ struct BookCardView: View {
   let onOpen: () -> Void
   let onToggleRead: () -> Void
   let onToggleFavorite: () -> Void
+  /// When true, replaces the progress label with a "Start reading..." callout
+  /// (used for the "To read" tab where the user hasn't started yet).
+  let showStartReadingHint: Bool
   @State private var isShowingCreateTag: Bool = false
   @State private var newTagName: String = ""
   @State private var isShowingEditDetails: Bool = false
   @State private var isShowingDeleteConfirm: Bool = false
+
+  init(
+    book: Book,
+    onOpen: @escaping () -> Void,
+    onToggleRead: @escaping () -> Void,
+    onToggleFavorite: @escaping () -> Void,
+    showStartReadingHint: Bool = false
+  ) {
+    self.book = book
+    self.onOpen = onOpen
+    self.onToggleRead = onToggleRead
+    self.onToggleFavorite = onToggleFavorite
+    self.showStartReadingHint = showStartReadingHint
+  }
 
   var body: some View {
     let documentKey = BookCardColorStore.documentKey(for: book)
@@ -41,17 +58,10 @@ struct BookCardView: View {
         VStack(alignment: .leading, spacing: 6) {
           HStack(spacing: 8) {
             if let tagText {
-              Text(tagText)
-                .font(.parkinsans(size: 12))
-                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.65) : .secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                  Capsule(style: .continuous)
-                    .fill(
-                      colorScheme == .dark
-                        ? Color.white.opacity(0.10) : Color(.secondarySystemBackground))
-                )
+              Text(tagText.uppercased())
+                .font(.parkinsansSemibold(size: 13))
+                .kerning(0.8)
+                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
             }
 
             if isPendingUpload {
@@ -198,13 +208,18 @@ struct BookCardView: View {
         }
       }
 
-      HStack(spacing: 14) {
-
-        Text("Progress: \(Int((book.progress * 100).rounded()))%")
-          .font(.parkinsans(size: 13))
-          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
-          .padding(.top, 10)
-
+      Group {
+        if showStartReadingHint {
+          Text("Start reading and save progress")
+            .font(.parkinsans(size: 13, weight: .medium))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+            .padding(.top, 10)
+        } else {
+          Text("Progress: \(Int((book.progress * 100).rounded()))%")
+            .font(.parkinsans(size: 13))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+            .padding(.top, 10)
+        }
       }
 
       ProgressBarView(progress: book.progress)

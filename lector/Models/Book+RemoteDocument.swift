@@ -13,9 +13,10 @@ extension Book {
     let totalPages = max(1, doc.metadata.pageCount ?? 1, savedPage)
     let startPage = min(savedPage, totalPages)
     let startProgress = doc.readingPosition?.progress
+    let lastReadAt = doc.readingPosition?.updatedAt ?? doc.updatedAt
     let daysAgo = max(
       0,
-      Calendar.current.dateComponents([.day], from: doc.updatedAt, to: Date()).day ?? 0
+      Calendar.current.dateComponents([.day], from: lastReadAt, to: Date()).day ?? 0
     )
 
     self.init(
@@ -23,11 +24,12 @@ extension Book {
       remoteID: doc.id,
       title: doc.title,
       author: authorText,
+      createdAt: doc.createdAt,
       pagesTotal: totalPages,
       currentPage: startPage,
       readingProgress: startProgress,
       sizeBytes: doc.metadata.fileSize ?? 0,
-      lastOpenedAt: doc.updatedAt,
+      lastOpenedAt: lastReadAt,
       lastOpenedDaysAgo: daysAgo,
       isRead: (startPage >= totalPages && totalPages > 0),
       isFavorite: doc.isFavorite,

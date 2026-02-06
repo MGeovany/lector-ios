@@ -67,20 +67,22 @@ final class HomeViewModel {
         let currentPage = pending.map { $0.pageNumber } ?? summary.currentPage
         let readingProgress = pending?.progress ?? summary.readingProgress
         let pagesTotal = max(1, summary.pagesTotal, currentPage)
+        let lastReadAt = pending?.updatedAt ?? summary.readingPositionUpdatedAt ?? summary.updatedAt
         return Book(
           id: UUID(uuidString: summary.id) ?? UUID(),
           remoteID: summary.id,
           title: summary.title,
           author: summary.author,
+          createdAt: summary.createdAt,
           pagesTotal: pagesTotal,
           currentPage: min(currentPage, pagesTotal),
           readingProgress: readingProgress,
           sizeBytes: summary.sizeBytes,
-          lastOpenedAt: pending?.updatedAt ?? summary.updatedAt,
+          lastOpenedAt: lastReadAt,
           lastOpenedDaysAgo: max(
             0,
             Calendar.current.dateComponents(
-              [.day], from: pending?.updatedAt ?? summary.updatedAt, to: Date()
+              [.day], from: lastReadAt, to: Date()
             ).day ?? 0
           ),
           isRead: (currentPage >= pagesTotal && pagesTotal > 0),
@@ -109,6 +111,7 @@ final class HomeViewModel {
           title: item.fileName.replacingOccurrences(
             of: ".pdf", with: "", options: [.caseInsensitive]),
           author: "Queued",
+          createdAt: item.createdAt,
           pagesTotal: 1,
           currentPage: 1,
           readingProgress: nil,
@@ -468,4 +471,97 @@ final class HomeViewModel {
       return false
     }
   }
+
+  // MARK: - Library Sections (All / Current / To read / Finished)
+
+  /// Returns books for the requested Library section, applying the same search behavior
+  /// as `filteredBooks`.
+  func libraryBooks(for section: LibrarySection) -> [Book] {
+    let base: [Book] = {
+      switch section {
+      case .allBooks:
+        // Unread first, then title (A→Z).
+        return books.sorted { lhs, rhs in
+          if lhs.isRead != rhs.isRead { return !lhs.isRead }
+          let c = lhs.title.localizedCaseInsensitiveCompare(rhs.title)
+          if c != .orderedSame { return c == .orderedAscending }
+          return lhs.id.uuidString < rhs.id.uuidString
+        }
+
+      case .current:
+        // In progress (started but not finished), most recently opened first.
+        return books
+          .filter { book in
+            !book.isRead && !isToRead(book)
+          }
+          .sorted { lhs, rhs in
+            if lhs.lastOpenedSortDate != rhs.lastOpenedSortDate {
+              return lhs.lastOpenedSortDate > rhs.lastOpenedSortDate
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
+          }
+
+      case .toRead:
+        // Not started yet; sort by title.
+        return books
+          .filter { book in
+            !book.isRead && isToRead(book)
+          }
+          .sorted { lhs, rhs in
+            let c = lhs.title.localizedCaseInsensitiveCompare(rhs.title)
+            if c != .orderedSame { return c == .orderedAscending }
+            return lhs.id.uuidString < rhs.id.uuidString
+          }
+
+      case .finished:
+        // Finished; most recently opened first.
+        return books
+          .filter { $0.isRead }
+          .sorted { lhs, rhs in
+            if lhs.lastOpenedSortDate != rhs.lastOpenedSortDate {
+              return lhs.lastOpenedSortDate > rhs.lastOpenedSortDate
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
+          }
+      }
+    }()
+
+    return applySearch(to: base)
+  }
+
+  private func isToRead(_ book: Book) -> Bool {
+    // Heuristic: "to read" means not finished and effectively not started.
+    // Many items start at page 1 by default, so we treat page 1 + near-zero progress as "not started".
+    guard !book.isRead else { return false }
+    let rp = min(1.0, max(0.0, book.readingProgress ?? 0))
+    return book.currentPage <= 1 && rp <= 0.02
+  }
+
+  private func applySearch(to base: [Book]) -> [Book] {
+    let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !q.isEmpty else { return base }
+    let lowered = q.lowercased()
+    return base.filter { book in
+      if book.title.lowercased().contains(lowered) { return true }
+      if book.author.lowercased().contains(lowered) { return true }
+      if book.tags.contains(where: { $0.lowercased().contains(lowered) }) { return true }
+      return false
+    }
+  }
 }
+
+#if DEBUG
+extension HomeViewModel {
+  static func previewLibrary(books: [Book]) -> HomeViewModel {
+    let vm = HomeViewModel()
+    vm.filter = .all
+    vm.searchQuery = ""
+    vm.books = books
+    vm.availableTags = ["Book", "Essay", "Notes", "Poetry"]
+    vm.isLoading = false
+    // Prevent `onAppear()` from calling `reload()` in previews.
+    vm.didLoadOnce = true
+    return vm
+  }
+}
+#endif

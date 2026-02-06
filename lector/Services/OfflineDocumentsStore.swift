@@ -157,6 +157,8 @@ final class DocumentsIndexStore {
     let pagesTotal: Int
     let currentPage: Int
     let readingProgress: Double?
+    /// Last time the reading position was updated (if available).
+    let readingPositionUpdatedAt: Date?
     let sizeBytes: Int64
     let updatedAt: Date
     let createdAt: Date
@@ -208,6 +210,7 @@ final class DocumentsIndexStore {
         pagesTotal: totalPages,
         currentPage: startPage,
         readingProgress: doc.readingPosition?.progress,
+        readingPositionUpdatedAt: doc.readingPosition?.updatedAt,
         sizeBytes: size,
         updatedAt: doc.updatedAt,
         createdAt: doc.createdAt,
