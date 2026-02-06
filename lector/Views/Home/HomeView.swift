@@ -10,6 +10,14 @@ struct HomeView: View {
   @State private var toast: UploadToastData?
   @StateObject private var networkMonitor = NetworkMonitor.shared
   @State private var selectedSection: LibrarySection = .allBooks
+  
+  private static let allowedImportTypes: [UTType] = {
+    var types: [UTType] = [.pdf]
+    if let epub = UTType(filenameExtension: "epub") { types.append(epub) }
+    types.append(.plainText) // .txt
+    if let md = UTType(filenameExtension: "md") { types.append(md) }
+    return types
+  }()
 
   init(viewModel: HomeViewModel? = nil, initialSection: LibrarySection = .current) {
     let vm = viewModel ?? HomeViewModel()
@@ -91,13 +99,13 @@ struct HomeView: View {
     }
     .fileImporter(
       isPresented: $showFilePicker,
-      allowedContentTypes: [UTType.pdf],
+      allowedContentTypes: Self.allowedImportTypes,
       allowsMultipleSelection: false
     ) { result in
       switch result {
       case .success(let urls):
         if let url = urls.first {
-          Task { await addViewModel.uploadPickedPDF(url) }
+          Task { await addViewModel.uploadPickedDocument(url) }
         }
       case .failure(let error):
         viewModel.alertMessage = error.localizedDescription

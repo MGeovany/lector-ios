@@ -17,7 +17,8 @@ extension Book {
     let lastReadAt = doc.readingPosition?.updatedAt ?? doc.updatedAt
     let effectiveProgress =
       startProgress
-      ?? (totalPages > 1 ? min(1.0, max(0.0, Double(min(max(1, startPage), totalPages)) / Double(totalPages)))
+      ?? (totalPages > 1
+        ? min(1.0, max(0.0, Double(min(max(1, startPage), totalPages)) / Double(totalPages)))
         : 0.0)
     let daysAgo = max(
       0,

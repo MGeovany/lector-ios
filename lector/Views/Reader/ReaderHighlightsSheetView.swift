@@ -183,7 +183,9 @@ private struct HighlightRowView: View {
         .fill(preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.04 : 0.06))
         .overlay(
           RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .stroke(preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.08 : 0.12), lineWidth: 1)
+            .stroke(
+              preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.08 : 0.12),
+              lineWidth: 1)
         )
     )
   }
@@ -213,4 +215,3 @@ private struct ActivityShareSheet: UIViewControllerRepresentable {
 
   func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
-

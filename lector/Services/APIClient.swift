@@ -169,7 +169,7 @@ final class APIClient {
     fileData: Data,
     fileName: String,
     fieldName: String = "file",
-    mimeType: String = "application/pdf"
+    mimeType: String
   ) async throws -> T {
     let boundary = "Boundary-\(UUID().uuidString)"
     var request = try makeRequest(path: path, method: "POST")

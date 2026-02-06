@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UniformTypeIdentifiers
 
 @MainActor
 @Observable
@@ -20,30 +21,32 @@ final class AddViewModel {
     self.userID = userID ?? KeychainStore.getString(account: KeychainKeys.userID) ?? APIConfig.defaultUserID
   }
 
-  func uploadPickedPDF(_ url: URL) async {
+  func uploadPickedDocument(_ url: URL) async {
     isUploading = true
     didUploadSuccessfully = false
     defer { isUploading = false }
 
     do {
-      let pdfData = try Self.readSecurityScopedFile(url)
+      let fileData = try Self.readSecurityScopedFile(url)
+      let fileName = url.lastPathComponent.isEmpty ? "document" : url.lastPathComponent
 
       // If offline, queue the upload locally.
       if !NetworkMonitor.shared.isOnline {
         _ = try PendingUploadsStore.enqueue(
-          pdfData: pdfData,
-          fileName: url.lastPathComponent.isEmpty ? "document.pdf" : url.lastPathComponent
+          fileData: fileData,
+          fileName: fileName
         )
         infoMessage = "You're offline. Your book will be uploaded and processed once you're back online."
         NotificationCenter.default.post(name: .documentsDidChange, object: nil)
         return
       }
 
-      try await validateQuotaAndSize(nextFileBytes: Int64(pdfData.count))
+      try await validateQuotaAndSize(nextFileBytes: Int64(fileData.count))
 
       _ = try await documentsService.uploadDocument(
-        pdfData: pdfData,
-        fileName: url.lastPathComponent.isEmpty ? "document.pdf" : url.lastPathComponent
+        fileData: fileData,
+        fileName: fileName,
+        mimeType: Self.mimeType(for: url) ?? "application/octet-stream"
       )
 
       didUploadSuccessfully = true
@@ -60,16 +63,38 @@ final class AddViewModel {
 
     for item in pending {
       do {
-        let data = try PendingUploadsStore.loadPDFData(id: item.id)
+        let data = try PendingUploadsStore.loadData(id: item.id)
         // Best-effort: quota check.
         try await validateQuotaAndSize(nextFileBytes: Int64(data.count))
-        _ = try await documentsService.uploadDocument(pdfData: data, fileName: item.fileName)
+        _ = try await documentsService.uploadDocument(
+          fileData: data,
+          fileName: item.fileName,
+          mimeType: Self.mimeType(forFileName: item.fileName) ?? "application/octet-stream"
+        )
         PendingUploadsStore.remove(id: item.id)
         NotificationCenter.default.post(name: .documentsDidChange, object: nil)
       } catch {
         // Stop on first failure; try again later.
         return
       }
+    }
+  }
+  
+  private static func mimeType(for url: URL) -> String? {
+    mimeType(forFileName: url.lastPathComponent)
+  }
+  
+  private static func mimeType(forFileName fileName: String) -> String? {
+    let ext = URL(fileURLWithPath: fileName).pathExtension.lowercased()
+    if let type = UTType(filenameExtension: ext), let mime = type.preferredMIMEType {
+      return mime
+    }
+    switch ext {
+    case "pdf": return "application/pdf"
+    case "epub": return "application/epub+zip"
+    case "txt": return "text/plain"
+    case "md", "markdown": return "text/markdown"
+    default: return nil
     }
   }
 

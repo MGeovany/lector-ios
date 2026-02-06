@@ -70,7 +70,8 @@ final class HomeViewModel {
         let lastReadAt = pending?.updatedAt ?? summary.readingPositionUpdatedAt ?? summary.updatedAt
         let effectiveProgress =
           readingProgress
-          ?? (pagesTotal > 1 ? min(1.0, max(0.0, Double(min(max(1, currentPage), pagesTotal)) / Double(pagesTotal)))
+          ?? (pagesTotal > 1
+            ? min(1.0, max(0.0, Double(min(max(1, currentPage), pagesTotal)) / Double(pagesTotal)))
             : 0.0)
         return Book(
           id: UUID(uuidString: summary.id) ?? UUID(),
@@ -109,11 +110,11 @@ final class HomeViewModel {
     let queued = PendingUploadsStore.list()
     if !queued.isEmpty {
       let queuedBooks: [Book] = queued.map { item in
-        Book(
+        let baseTitle = URL(fileURLWithPath: item.fileName).deletingPathExtension().lastPathComponent
+        return Book(
           id: UUID(uuidString: item.id) ?? UUID(),
           remoteID: nil,
-          title: item.fileName.replacingOccurrences(
-            of: ".pdf", with: "", options: [.caseInsensitive]),
+          title: baseTitle.isEmpty ? item.fileName : baseTitle,
           author: "Queued",
           createdAt: item.createdAt,
           pagesTotal: 1,
@@ -522,7 +523,8 @@ final class HomeViewModel {
 
       case .current:
         // In progress (started but not finished), most recently opened first.
-        return books
+        return
+          books
           .filter { book in
             !book.isRead && !isToRead(book)
           }
@@ -535,7 +537,8 @@ final class HomeViewModel {
 
       case .toRead:
         // Not started yet; sort by title.
-        return books
+        return
+          books
           .filter { book in
             !book.isRead && isToRead(book)
           }
@@ -547,7 +550,8 @@ final class HomeViewModel {
 
       case .finished:
         // Finished; most recently opened first.
-        return books
+        return
+          books
           .filter { $0.isRead }
           .sorted { lhs, rhs in
             if lhs.lastOpenedSortDate != rhs.lastOpenedSortDate {
@@ -583,17 +587,17 @@ final class HomeViewModel {
 }
 
 #if DEBUG
-extension HomeViewModel {
-  static func previewLibrary(books: [Book]) -> HomeViewModel {
-    let vm = HomeViewModel()
-    vm.filter = .all
-    vm.searchQuery = ""
-    vm.books = books
-    vm.availableTags = ["Book", "Essay", "Notes", "Poetry"]
-    vm.isLoading = false
-    // Prevent `onAppear()` from calling `reload()` in previews.
-    vm.didLoadOnce = true
-    return vm
+  extension HomeViewModel {
+    static func previewLibrary(books: [Book]) -> HomeViewModel {
+      let vm = HomeViewModel()
+      vm.filter = .all
+      vm.searchQuery = ""
+      vm.books = books
+      vm.availableTags = ["Book", "Essay", "Notes", "Poetry"]
+      vm.isLoading = false
+      // Prevent `onAppear()` from calling `reload()` in previews.
+      vm.didLoadOnce = true
+      return vm
+    }
   }
-}
 #endif
