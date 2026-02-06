@@ -130,7 +130,28 @@ struct ReaderSettingsRoundIconTile: View {
   let surfaceText: Color
   let secondaryText: Color
   let isEnabled: Bool
+  /// Controls whether taps are allowed. Use this when you want a "disabled" look
+  /// but still want to intercept the tap (e.g. show upgrade/pricing).
+  let isInteractable: Bool?
   let action: () -> Void
+  
+  init(
+    title: String,
+    systemImage: String,
+    surfaceText: Color,
+    secondaryText: Color,
+    isEnabled: Bool,
+    isInteractable: Bool? = nil,
+    action: @escaping () -> Void
+  ) {
+    self.title = title
+    self.systemImage = systemImage
+    self.surfaceText = surfaceText
+    self.secondaryText = secondaryText
+    self.isEnabled = isEnabled
+    self.isInteractable = isInteractable
+    self.action = action
+  }
 
   var body: some View {
     Button(action: action) {
@@ -152,7 +173,7 @@ struct ReaderSettingsRoundIconTile: View {
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .buttonStyle(.plain)
-    .disabled(!isEnabled)
+    .disabled(!((isInteractable ?? isEnabled)))
     .opacity(isEnabled ? 1.0 : 0.85)
   }
 }

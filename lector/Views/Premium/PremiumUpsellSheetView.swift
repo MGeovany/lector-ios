@@ -111,12 +111,12 @@ struct PremiumUpsellSheetView: View {
       PlanCard(
         title: "Pro",
         priceText: proPriceText,
-        subtitle: "\(MAX_STORAGE_PRO_GB)GB storage, sync + backup, and AI soon.",
+        subtitle: "\(MAX_STORAGE_PRO_GB)GB storage, sync + backup, and Ask AI.",
         bullets: [
           "\(MAX_STORAGE_PRO_GB)GB total storage",
           "Sync + backup",
           "Private stats (soon)",
-          "AI features (coming soon)",
+          "Ask AI features",
         ],
         badgeText: billingCycle == .yearly ? "Popular" : nil,
         isSelected: selectedPlan.isPro,
@@ -131,6 +131,7 @@ struct PremiumUpsellSheetView: View {
         subtitle: "A one‑time purchase to support Lector early.",
         bullets: [
           "Everything in Pro",
+          "Ask AI (\(MAX_AI_TOKENS_PREMIUM_PER_MONTH) tokens/month)",
           "Early access",
           "“Lector Founder” badge",
         ],

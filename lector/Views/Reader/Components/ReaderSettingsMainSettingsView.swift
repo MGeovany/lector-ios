@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ReaderSettingsMainSettingsView: View {
   @EnvironmentObject private var preferences: PreferencesViewModel
+  @EnvironmentObject private var subscription: SubscriptionStore
 
   @Binding var isPresented: Bool
   @Binding var isLocked: Bool
@@ -19,6 +20,9 @@ struct ReaderSettingsMainSettingsView: View {
   let onDisableOffline: () -> Void
   let offlineSubtitle: String?
   let offlineIsAvailable: Bool
+
+  @State private var showPremiumSheet: Bool = false
+  private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
   var body: some View {
     let gap: CGFloat = 15
@@ -90,6 +94,29 @@ struct ReaderSettingsMainSettingsView: View {
       }
     }
     .frame(height: totalH)
+    // On iPad, present full-screen so the subscription UI is bigger.
+    .sheet(
+      isPresented: Binding(
+        get: { showPremiumSheet && !isPad },
+        set: { newValue in
+          if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+        }
+      )
+    ) {
+      PremiumUpsellSheetView()
+        .environmentObject(subscription)
+    }
+    .fullScreenCover(
+      isPresented: Binding(
+        get: { showPremiumSheet && isPad },
+        set: { newValue in
+          if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+        }
+      )
+    ) {
+      PremiumUpsellSheetView()
+        .environmentObject(subscription)
+    }
   }
 
   private var themePill: some View {
@@ -156,12 +183,16 @@ struct ReaderSettingsMainSettingsView: View {
       systemImage: "brain",
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
-      isEnabled: true,
+      isEnabled: subscription.isPremium,
+      isInteractable: true,
       action: {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-          // localDragOffset = 0
-          screen = .askAI
-
+          if subscription.isPremium {
+            // localDragOffset = 0
+            screen = .askAI
+          } else {
+            showPremiumSheet = true
+          }
         }
       }
     )

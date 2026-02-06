@@ -15,6 +15,10 @@ public let MAX_STORAGE_MB: Int = 15
 public let MAX_STORAGE_PRO_GB: Int = 50
 public let MAX_STORAGE_PREMIUM_MB: Int = 250
 
+// Ask AI quota (tokens per month) for paid tiers.
+// Note: backend enforcement must also match this value.
+public let MAX_AI_TOKENS_PREMIUM_PER_MONTH: Int = 500_000
+
 enum APIConfig {
   /// Prefer Info.plist configuration (set via Xcode build settings). Falls back to hardcoded defaults.
   static var baseURL: URL {
