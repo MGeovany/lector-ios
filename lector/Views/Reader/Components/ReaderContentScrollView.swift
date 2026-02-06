@@ -10,7 +10,7 @@ struct ReaderContentScrollView: View {
   let horizontalPadding: CGFloat
   let shouldUseContinuousScroll: Bool
   let showTopChrome: Bool
-  let highlightQuotes: [String]
+  let highlights: [RemoteHighlight]
 
   @Binding var showSearch: Bool
   @Binding var searchQuery: String
@@ -193,7 +193,7 @@ struct ReaderContentScrollView: View {
           lineSpacing: CGFloat(preferences.fontSize) * CGFloat(max(0, preferences.lineSpacing - 1)),
           textAlignment: preferences.textAlignment == .justify ? .justified : .natural,
           highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
-          highlightQuotes: highlightQuotes,
+          highlightQuotes: highlightQuotesForPage(pageNumber: idx + 1),
           showHighlightsInText: preferences.showHighlightsInText,
           highlightColor: preferences.highlightColor.highlightUIColor(for: preferences.theme),
           highlightOpacity: preferences.highlightColor.highlightOpacity(for: preferences.theme),
@@ -219,7 +219,7 @@ struct ReaderContentScrollView: View {
       lineSpacing: CGFloat(preferences.fontSize) * CGFloat(max(0, preferences.lineSpacing - 1)),
       textAlignment: preferences.textAlignment == .justify ? .justified : .natural,
       highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
-      highlightQuotes: highlightQuotes,
+      highlightQuotes: highlightQuotesForPage(pageNumber: viewModel.currentIndex + 1),
       showHighlightsInText: preferences.showHighlightsInText,
       highlightColor: preferences.highlightColor.highlightUIColor(for: preferences.theme),
       highlightOpacity: preferences.highlightColor.highlightOpacity(for: preferences.theme),
@@ -237,5 +237,13 @@ struct ReaderContentScrollView: View {
   private var currentPageText: String {
     guard viewModel.pages.indices.contains(viewModel.currentIndex) else { return "" }
     return viewModel.pages[viewModel.currentIndex]
+  }
+
+  private func highlightQuotesForPage(pageNumber: Int) -> [String] {
+    // Critical: only highlight quotes that belong to this page.
+    // This prevents common-word fallbacks (e.g. "the") from lighting up across many pages.
+    highlights
+      .filter { $0.pageNumber == pageNumber }
+      .map(\.quote)
   }
 }

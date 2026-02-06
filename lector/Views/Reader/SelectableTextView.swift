@@ -222,7 +222,10 @@ struct SelectableTextView: UIViewRepresentable {
     let maxWords = min(25, words.count)
     func trySubstring(_ substring: String) -> [NSRange]? {
       let t = substring.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard t.count >= 2 else { return nil }
+      // Avoid highlighting extremely short/common fragments when a quote spans pages.
+      // Example bug: fallback to "the" would highlight it everywhere.
+      guard t.count >= 10 else { return nil }
+      guard t.contains(" ") else { return nil } // require at least 2 words
       var out: [NSRange] = []
       var searchRange = NSRange(location: 0, length: full.length)
       while searchRange.length > 0 {

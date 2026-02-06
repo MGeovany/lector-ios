@@ -9,9 +9,14 @@ struct HomeView: View {
   @State private var pickedURL: URL?
   @State private var toast: UploadToastData?
   @StateObject private var networkMonitor = NetworkMonitor.shared
+  @State private var selectedSection: LibrarySection = .allBooks
 
-  init(viewModel: HomeViewModel? = nil) {
-    _viewModel = State(initialValue: viewModel ?? HomeViewModel())
+  init(viewModel: HomeViewModel? = nil, initialSection: LibrarySection = .current) {
+    let vm = viewModel ?? HomeViewModel()
+    // Library needs the full collection for section tabs.
+    vm.filter = .all
+    _viewModel = State(initialValue: vm)
+    _selectedSection = State(initialValue: initialSection)
   }
 
   var body: some View {
@@ -20,74 +25,37 @@ struct HomeView: View {
       ZStack {
         background.ignoresSafeArea()
 
-        ScrollView(showsIndicators: false) {
-          VStack(alignment: .leading, spacing: 16) {
-            HomeHeaderView(
-              searchText: $viewModel.searchQuery,
-              onAddTapped: {
-                showFilePicker = true
-              })
-
-            if !networkMonitor.isOnline {
-              Text("Offline — showing cached library.")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 8)
-            }
-
-            // Filter buttons: Recents, All, Read
-            // (Temporarily hidden per design review; keep logic intact.)
-            if false {
-              FilterTabsView(
-                filter: $viewModel.filter,
-                colorScheme: colorScheme,
-                onFilterChange: {
-                  Task { await viewModel.reload() }
-                }
-              )
-            }
-
-            // HomeStatsRowView(
-            //   documentsCount: viewModel.books.count,
-            //   usedBytes: viewModel.books.reduce(Int64(0)) { $0 + $1.sizeBytes },
-            //   maxStorageText: "\(MAX_STORAGE_MB) MB"
-            // )
-
-            if viewModel.filteredBooks.isEmpty && viewModel.isLoading {
-              HomeSkeletonList()
-                .padding(.top, 6)
-            } else if !viewModel.isLoading && viewModel.books.isEmpty {
-              EmptyLibraryPlaceholderView(
-                colorScheme: colorScheme,
-                onAddTapped: {
-                  showFilePicker = true
-                }
-              )
-              .padding(.top, 22)
-            } else if viewModel.filteredBooks.isEmpty {
-              EmptySearchPlaceholderView(colorScheme: colorScheme)
-                .padding(.top, 22)
-            } else {
-              LazyVStack(spacing: 14) {
-                ForEach(viewModel.filteredBooks) { book in
-                  BookCardView(
-                    book: book,
-                    onOpen: { viewModel.selectedBook = book },
-                    onToggleRead: { viewModel.toggleRead(bookID: book.id) },
-                    onToggleFavorite: { viewModel.toggleFavorite(bookID: book.id) }
-                  )
-                }
-              }
-              .padding(.top, 6)
-            }
-          }
+        VStack(alignment: .leading, spacing: 12) {
+          HomeHeaderView(
+            searchText: $viewModel.searchQuery,
+            onAddTapped: { showFilePicker = true }
+          )
           .padding(.horizontal, 18)
           .padding(.top, 14)
-          .padding(.bottom, 26)
-        }
-        .refreshable {
-          await viewModel.reload()
+
+          if !networkMonitor.isOnline {
+            Text("Offline — showing cached library.")
+              .font(.system(size: 13, weight: .regular))
+              .foregroundStyle(.secondary)
+              .frame(maxWidth: .infinity, alignment: .center)
+              .padding(.horizontal, 18)
+              .padding(.vertical, 6)
+          }
+
+          LibrarySectionTabsView(selected: $selectedSection)
+
+          TabView(selection: $selectedSection) {
+            ForEach(LibrarySection.allCases) { section in
+              LibrarySectionPageView(
+                section: section,
+                colorScheme: colorScheme,
+                onAddTapped: { showFilePicker = true }
+              )
+              .tag(section)
+            }
+          }
+          .tabViewStyle(.page(indexDisplayMode: .never))
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
       }
       .toolbar(.hidden, for: .navigationBar)
@@ -231,6 +199,409 @@ struct HomeView: View {
 }
 
 // MARK: - Upload Toast (non-blocking)
+
+private struct LibrarySectionPageView: View {
+  let section: LibrarySection
+  let colorScheme: ColorScheme
+  let onAddTapped: () -> Void
+  @Environment(HomeViewModel.self) private var viewModel
+
+  var body: some View {
+    GeometryReader { geometry in
+      ScrollView(showsIndicators: false) {
+        VStack(alignment: .leading, spacing: 16) {
+          let isSearching = !viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
+          let books = viewModel.libraryBooks(for: section)
+
+          // Special layout for Current (dashboard sections) when not searching.
+          if section == .current && !isSearching && !viewModel.books.isEmpty {
+            CurrentLibraryDashboardView()
+              .padding(.top, 4)
+          } else if books.isEmpty && viewModel.isLoading {
+            HomeSkeletonList()
+              .padding(.top, 6)
+              .frame(minHeight: geometry.size.height - 40)
+          } else if !viewModel.isLoading && viewModel.books.isEmpty {
+            EmptyLibraryPlaceholderView(colorScheme: colorScheme, onAddTapped: onAddTapped)
+              .padding(.top, 22)
+              .frame(minHeight: geometry.size.height - 40)
+          } else if books.isEmpty {
+            if !viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+              EmptySearchPlaceholderView(colorScheme: colorScheme)
+                .padding(.top, 22)
+                .frame(minHeight: geometry.size.height - 40)
+            } else {
+              LibrarySectionEmptyStateView(section: section, colorScheme: colorScheme)
+                .padding(.top, 22)
+                .frame(minHeight: geometry.size.height - 40)
+            }
+          } else {
+            // Minimal list style for All / To read / Finished (and search results).
+            LazyVStack(spacing: 0) {
+              ForEach(books) { book in
+                let statusText: String? = {
+                  switch section {
+                  case .allBooks:
+                    return book.completionStatusText ?? book.readingStatusText
+                  case .finished:
+                    return book.completionStatusText
+                  default:
+                    return nil
+                  }
+                }()
+                MinimalBookRowView(
+                  book: book,
+                  showsOptions: section == .allBooks,
+                  statusText: statusText,
+                  onOpen: { viewModel.selectedBook = book }
+                )
+              }
+            }
+            .padding(.top, 6)
+          }
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 26)
+      }
+      .refreshable { await viewModel.reload() }
+    }
+  }
+}
+
+private struct CurrentLibraryDashboardView: View {
+  @Environment(\.colorScheme) private var colorScheme
+  @Environment(HomeViewModel.self) private var viewModel
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 26) {
+      let inProgress = viewModel.libraryBooks(for: .current)
+        .sorted { $0.lastOpenedSortDate > $1.lastOpenedSortDate }
+      let resume = inProgress.first
+      let nextUp = Array(inProgress.dropFirst())
+      let recentlyAdded = viewModel.books
+        .sorted { $0.createdSortDate > $1.createdSortDate }
+        .prefix(12)
+
+      sectionHeader("RESUME READING")
+
+      if let resume {
+        ResumeReadingCardView(book: resume, onContinue: { viewModel.selectedBook = resume })
+      } else {
+        EmptyInlineHint(text: "Start reading a book and it will show up here.")
+      }
+
+      if !nextUp.isEmpty {
+        sectionHeader("NEXT UP")
+        NextUpRowView(books: nextUp, onOpen: { viewModel.selectedBook = $0 })
+      }
+
+      if !recentlyAdded.isEmpty {
+        sectionHeader("RECENTLY ADDED")
+        VStack(spacing: 0) {
+          ForEach(Array(recentlyAdded)) { book in
+            RecentlyAddedRowView(book: book, onOpen: { viewModel.selectedBook = book })
+          }
+        }
+      }
+    }
+  }
+
+  private func sectionHeader(_ text: String) -> some View {
+    Text(text)
+      .font(.parkinsansSemibold(size: 13))
+      .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+      .kerning(1.2)
+      .padding(.top, 2)
+  }
+}
+
+private struct ResumeReadingCardView: View {
+  let book: Book
+  let onContinue: () -> Void
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    Button(action: onContinue) {
+      HStack(alignment: .top, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
+          VStack(alignment: .leading, spacing: 6) {
+            Text(book.title.uppercased())
+              .font(.parkinsansMedium(size: 34))
+              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
+              .lineLimit(3)
+              .minimumScaleFactor(0.7)
+              .padding(.trailing, 44) // reserve space for options menu
+
+            Text(book.author.uppercased())
+              .font(.parkinsans(size: 14, weight: .semibold))
+              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.42) : .secondary)
+              .lineLimit(1)
+              .padding(.trailing, 44)
+          }
+
+          HStack {
+            Text("PAGE \(book.currentPage) OF \(book.pagesTotal)")
+              .font(.parkinsansSemibold(size: 13))
+              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : AppColors.matteBlack.opacity(0.55))
+
+            Spacer()
+
+            Text("\(Int((book.progress * 100).rounded()))%")
+              .font(.parkinsansSemibold(size: 13))
+              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : AppColors.matteBlack.opacity(0.55))
+          }
+
+          ProgressBarView(progress: book.progress)
+            .frame(height: 9)
+            .padding(.top, 2)
+
+          HStack {
+            Text("CONTINUE")
+              .font(.parkinsansSemibold(size: 14))
+              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.80) : AppColors.matteBlack)
+              .underline()
+
+            Spacer()
+
+            Circle()
+              .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.22) : AppColors.matteBlack.opacity(0.35), lineWidth: 1.25)
+              .frame(width: 34, height: 34)
+              .overlay(
+                Image(systemName: "chevron.right")
+                  .font(.system(size: 14, weight: .semibold))
+                  .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.82) : AppColors.matteBlack.opacity(0.82))
+              )
+          }
+          .padding(.top, 2)
+        }
+      }
+      .padding(14)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color(.systemBackground))
+          .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+              .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.35), lineWidth: 1)
+          )
+      )
+    }
+    .buttonStyle(.plain)
+    .overlay(alignment: .topTrailing) {
+      BookOptionsMenu(book: book)
+        .padding(10)
+    }
+  }
+}
+
+private struct NextUpRowView: View {
+  let books: [Book]
+  let onOpen: (Book) -> Void
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    GeometryReader { geo in
+      let count = books.count
+      let spacing: CGFloat = 14
+
+      if count <= 3 {
+        let w = (geo.size.width - spacing * CGFloat(max(0, count - 1))) / CGFloat(max(1, count))
+        HStack(spacing: spacing) {
+          ForEach(books) { book in
+            NextUpTileView(book: book, onOpen: { onOpen(book) })
+              .frame(width: w, alignment: .leading)
+          }
+        }
+      } else {
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(spacing: spacing) {
+            ForEach(books) { book in
+              NextUpTileView(book: book, onOpen: { onOpen(book) })
+                .frame(width: 220, alignment: .leading)
+            }
+          }
+          .padding(.vertical, 2)
+        }
+      }
+    }
+    .frame(height: 120)
+  }
+}
+
+private struct NextUpTileView: View {
+  let book: Book
+  let onOpen: () -> Void
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    Button(action: onOpen) {
+      VStack(alignment: .leading, spacing: 8) {
+        Text(book.title.uppercased())
+          .font(.parkinsansSemibold(size: 16))
+          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
+          .lineLimit(2)
+
+        Text(book.author)
+          .font(.parkinsans(size: 13, weight: .medium))
+          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
+          .lineLimit(1)
+
+        HStack {
+          Text("PAGE \(book.currentPage) / \(book.pagesTotal)")
+          Spacer()
+          Text("\(Int((book.progress * 100).rounded()))%")
+        }
+        .font(.parkinsans(size: 12, weight: .medium))
+        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+
+        ProgressBarView(progress: book.progress)
+          .frame(height: 9)
+      }
+      .padding(14)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color(.systemBackground))
+          .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+              .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.30), lineWidth: 1)
+          )
+      )
+    }
+    .buttonStyle(.plain)
+    .overlay(alignment: .topTrailing) {
+      BookOptionsMenu(book: book)
+        .padding(6)
+    }
+  }
+}
+
+private struct RecentlyAddedRowView: View {
+  let book: Book
+  let onOpen: () -> Void
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    Button(action: onOpen) {
+      HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 4) {
+          Text(book.title.uppercased())
+            .font(.parkinsansSemibold(size: 15))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
+            .lineLimit(2)
+
+          Text(book.author)
+            .font(.parkinsans(size: 13))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
+            .lineLimit(1)
+
+          Text("\(book.pagesTotal) pages")
+            .font(.parkinsans(size: 12, weight: .medium))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
+            .lineLimit(1)
+        }
+
+        Spacer(minLength: 0)
+
+        Circle()
+          .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.22) : AppColors.matteBlack.opacity(0.35), lineWidth: 1.25)
+          .frame(width: 34, height: 34)
+          .overlay(
+            Image(systemName: "arrow.right")
+              .font(.system(size: 14, weight: .semibold))
+              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.82) : AppColors.matteBlack.opacity(0.82))
+          )
+      }
+      .padding(.vertical, 18)
+      .padding(.horizontal, 18)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .overlay(alignment: .bottom) {
+        Rectangle()
+          .fill(colorScheme == .dark ? Color.white.opacity(0.10) : AppColors.matteBlack.opacity(0.85))
+          .frame(height: 1)
+      }
+    }
+    .buttonStyle(.plain)
+  }
+}
+
+private struct EmptyInlineHint: View {
+  let text: String
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    Text(text)
+      .font(.parkinsans(size: 14, weight: .medium))
+      .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
+      .padding(.vertical, 10)
+  }
+}
+
+private struct LibrarySectionEmptyStateView: View {
+  let section: LibrarySection
+  let colorScheme: ColorScheme
+
+  var body: some View {
+    VStack(spacing: 12) {
+      Image(systemName: iconName)
+        .font(.system(size: 28, weight: .semibold))
+        .foregroundStyle(iconColor)
+        .padding(.bottom, 2)
+
+      Text(title)
+        .font(.parkinsans(size: 18, weight: .semibold))
+        .foregroundStyle(titleColor)
+
+      Text(subtitle)
+        .font(.parkinsans(size: 14, weight: .medium))
+        .foregroundStyle(subtitleColor)
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 24)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 18)
+  }
+
+  private var iconName: String {
+    switch section {
+    case .allBooks: return "books.vertical"
+    case .current: return "bookmark"
+    case .toRead: return "book"
+    case .finished: return "checkmark.seal"
+    }
+  }
+
+  private var title: String {
+    switch section {
+    case .allBooks: return "No books"
+    case .current: return "Nothing in progress"
+    case .toRead: return "Nothing to read yet"
+    case .finished: return "No finished books"
+    }
+  }
+
+  private var subtitle: String {
+    switch section {
+    case .allBooks: return "Add a book to get started."
+    case .current: return "Start reading a book and it will show up here."
+    case .toRead: return "Books you haven't started will appear here."
+    case .finished: return "Finish a book and it will show up here."
+    }
+  }
+
+  private var titleColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack.opacity(0.92)
+  }
+
+  private var subtitleColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.55) : AppColors.matteBlack.opacity(0.55)
+  }
+
+  private var iconColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.60) : AppColors.matteBlack.opacity(0.40)
+  }
+}
 
 private struct EmptyLibraryPlaceholderView: View {
   let colorScheme: ColorScheme
@@ -582,3 +953,142 @@ struct FilterTabsView: View {
     .environmentObject(PreferencesViewModel())
     .environmentObject(SubscriptionStore())
 }
+
+#if DEBUG
+private enum LibraryPreviewData {
+  static var books: [Book] {
+    let now = Date()
+    return [
+      // To read
+      Book(
+        id: UUID(),
+        remoteID: UUID().uuidString,
+        title: "Atomic Habits",
+        author: "James Clear",
+        createdAt: Calendar.current.date(byAdding: .day, value: -14, to: now),
+        pagesTotal: 320,
+        currentPage: 1,
+        readingProgress: nil,
+        sizeBytes: 5_200_000,
+        lastOpenedAt: Calendar.current.date(byAdding: .day, value: -4, to: now),
+        lastOpenedDaysAgo: 4,
+        isRead: false,
+        isFavorite: false,
+        tags: ["Book"]
+      ),
+      Book(
+        id: UUID(),
+        remoteID: UUID().uuidString,
+        title: "The Pragmatic Programmer",
+        author: "Andy Hunt",
+        createdAt: Calendar.current.date(byAdding: .day, value: -2, to: now),
+        pagesTotal: 352,
+        currentPage: 1,
+        readingProgress: 0.0,
+        sizeBytes: 7_100_000,
+        lastOpenedAt: Calendar.current.date(byAdding: .day, value: -10, to: now),
+        lastOpenedDaysAgo: 10,
+        isRead: false,
+        isFavorite: true,
+        tags: ["Tech"]
+      ),
+
+      // Current (in progress)
+      Book(
+        id: UUID(),
+        remoteID: UUID().uuidString,
+        title: "Milk and Honey",
+        author: "Rupi Kaur",
+        createdAt: Calendar.current.date(byAdding: .day, value: -30, to: now),
+        pagesTotal: 204,
+        currentPage: 35,
+        readingProgress: 0.171,
+        sizeBytes: 3_900_000,
+        lastOpenedAt: Calendar.current.date(byAdding: .hour, value: -3, to: now),
+        lastOpenedDaysAgo: 0,
+        isRead: false,
+        isFavorite: true,
+        tags: ["Poetry"]
+      ),
+      Book(
+        id: UUID(),
+        remoteID: UUID().uuidString,
+        title: "Dune",
+        author: "Frank Herbert",
+        createdAt: Calendar.current.date(byAdding: .day, value: -6, to: now),
+        pagesTotal: 688,
+        currentPage: 120,
+        readingProgress: 0.174,
+        sizeBytes: 12_800_000,
+        lastOpenedAt: Calendar.current.date(byAdding: .hour, value: -26, to: now),
+        lastOpenedDaysAgo: 1,
+        isRead: false,
+        isFavorite: false,
+        tags: ["Sci‑Fi"]
+      ),
+
+      // Finished
+      Book(
+        id: UUID(),
+        remoteID: UUID().uuidString,
+        title: "1984",
+        author: "George Orwell",
+        createdAt: Calendar.current.date(byAdding: .day, value: -40, to: now),
+        pagesTotal: 328,
+        currentPage: 328,
+        readingProgress: 1.0,
+        sizeBytes: 4_600_000,
+        lastOpenedAt: Calendar.current.date(byAdding: .day, value: -2, to: now),
+        lastOpenedDaysAgo: 2,
+        isRead: true,
+        isFavorite: false,
+        tags: ["Classic"]
+      ),
+      Book(
+        id: UUID(),
+        remoteID: UUID().uuidString,
+        title: "Sapiens",
+        author: "Yuval Noah Harari",
+        createdAt: Calendar.current.date(byAdding: .day, value: -1, to: now),
+        pagesTotal: 498,
+        currentPage: 498,
+        readingProgress: 1.0,
+        sizeBytes: 9_400_000,
+        lastOpenedAt: Calendar.current.date(byAdding: .day, value: -18, to: now),
+        lastOpenedDaysAgo: 18,
+        isRead: true,
+        isFavorite: true,
+        tags: ["Essay"]
+      ),
+    ]
+  }
+
+  static func viewModel() -> HomeViewModel {
+    HomeViewModel.previewLibrary(books: books)
+  }
+}
+
+#Preview("Library • All books") {
+  HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .allBooks)
+    .environmentObject(PreferencesViewModel())
+    .environmentObject(SubscriptionStore())
+}
+
+#Preview("Library • Current") {
+  HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .current)
+    .environmentObject(PreferencesViewModel())
+    .environmentObject(SubscriptionStore())
+}
+
+#Preview("Library • To read") {
+  HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .toRead)
+    .environmentObject(PreferencesViewModel())
+    .environmentObject(SubscriptionStore())
+}
+
+#Preview("Library • Finished") {
+  HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .finished)
+    .environmentObject(PreferencesViewModel())
+    .environmentObject(SubscriptionStore())
+}
+#endif

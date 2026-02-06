@@ -82,10 +82,12 @@ struct RemoteDocument: Codable, Hashable {
 struct RemoteReadingPosition: Codable, Hashable {
   let progress: Double?
   let pageNumber: Int?
+  let updatedAt: Date?
 
   enum CodingKeys: String, CodingKey {
     case progress
     case pageNumber = "page_number"
+    case updatedAt = "updated_at"
   }
 }
 

@@ -5,6 +5,7 @@ struct ReaderTopBarView: View {
 
   let horizontalPadding: CGFloat
   @Binding var showReaderSettings: Bool
+  let onShowHighlights: () -> Void
   let onBack: () -> Void
 
   private var isDarkTheme: Bool {
@@ -43,6 +44,15 @@ struct ReaderTopBarView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Reader settings")
+
+        Button(action: onShowHighlights) {
+          Image(systemName: "bookmark")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
+            .padding(8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Highlights")
 
         Button {
           withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {

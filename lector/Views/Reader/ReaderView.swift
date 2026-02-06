@@ -49,6 +49,7 @@ struct ReaderView: View {
   private let highlightsService: HighlightsServicing = GoHighlightsService()
 
   @State private var documentHighlights: [RemoteHighlight] = []
+  @State private var isHighlightsSheetPresented: Bool = false
 
   private let shortDocContinuousScrollMaxPages: Int = 10
   private let horizontalPadding: CGFloat = 20
@@ -95,6 +96,9 @@ struct ReaderView: View {
             ReaderTopBarView(
               horizontalPadding: horizontalPadding,
               showReaderSettings: $settings.isPresented,
+              onShowHighlights: {
+                isHighlightsSheetPresented = true
+              },
               onBack: handleBack
             )
           }
@@ -110,7 +114,7 @@ struct ReaderView: View {
             horizontalPadding: horizontalPadding,
             shouldUseContinuousScroll: shouldUseContinuousScroll,
             showTopChrome: showEdges,
-            highlightQuotes: documentHighlights.map(\.quote),
+            highlights: documentHighlights,
             showSearch: $search.isVisible,
             searchQuery: $search.query,
             clearSelectionToken: $highlight.clearSelectionToken,
@@ -363,6 +367,23 @@ struct ReaderView: View {
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
       }
     }
+    .sheet(isPresented: $isHighlightsSheetPresented) {
+      ReaderHighlightsSheetView(
+        book: book,
+        highlights: $documentHighlights,
+        onGoToHighlight: { h in
+          goToHighlight(h)
+        },
+        onDeleteHighlight: { h in
+          await deleteHighlight(h)
+        },
+        onRefresh: {
+          await refreshHighlights()
+        }
+      )
+      .environmentObject(preferences)
+      .presentationDetents([.medium, .large])
+    }
     .overlay {
       if audiobook.isConverting {
         ReaderAudiobookConvertingOverlayView()
@@ -451,7 +472,7 @@ struct ReaderView: View {
           }
         }
         Task {
-          documentHighlights = (try? await highlightsService.listHighlights(documentID: id)) ?? []
+          await refreshHighlights()
         }
       }
       audiobook.setOnRequestPageIndexChange { idx in
@@ -484,6 +505,51 @@ struct ReaderView: View {
       cancelFocusAutoHide()
       stopOfflineMonitor()
     }
+  }
+
+  @MainActor
+  private func refreshHighlights() async {
+    guard let id = book.remoteID, !id.isEmpty else {
+      documentHighlights = []
+      return
+    }
+    documentHighlights = (try? await highlightsService.listHighlights(documentID: id)) ?? []
+  }
+
+  @MainActor
+  private func deleteHighlight(_ h: RemoteHighlight) async {
+    do {
+      try await highlightsService.deleteHighlight(highlightID: h.id)
+      documentHighlights.removeAll { $0.id == h.id }
+    } catch {
+      // Non-blocking; keep existing list if delete fails.
+      #if DEBUG
+        print("[ReaderView] Failed to delete highlight: \(error)")
+      #endif
+    }
+  }
+
+  @MainActor
+  private func goToHighlight(_ h: RemoteHighlight) {
+    let total = viewModel.pages.count
+    guard total > 0 else { return }
+
+    let idx: Int = {
+      if let page = h.pageNumber {
+        return min(max(0, page - 1), total - 1)
+      }
+      if let pr = h.progress {
+        return min(max(0, Int(round(min(1, max(0, pr)) * Double(total - 1)))), total - 1)
+      }
+      return min(max(0, viewModel.currentIndex), total - 1)
+    }()
+
+    viewModel.currentIndex = idx
+    if shouldUseContinuousScroll {
+      requestScrollToPage(idx)
+    }
+    // Clear any text selection overlay state.
+    highlight.clearSelectionToken &+= 1
   }
 
   private func updateAskAIPageContext() {

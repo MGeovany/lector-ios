@@ -46,6 +46,7 @@ struct HighlightShareEditorView: View {
 
   @State private var draft: HighlightShareDraft
   @State private var isSaving: Bool = false
+  @State private var isPersistingOnly: Bool = false
   @State private var showToast: Bool = false
   @State private var toastMessage: String = "Image saved to Photos app"
   @State private var shareImage: UIImage?
@@ -161,27 +162,73 @@ struct HighlightShareEditorView: View {
   }
 
   private var buttons: some View {
-    Button {
-      Task { await shareOrSave() }
-    } label: {
-      HStack(spacing: 8) {
-        if isSaving {
-          ProgressView().tint(AppColors.primaryActionForeground)
-        } else {
-
-          Text("Share Highlight")
-          Image("ActionShare")
-            .renderingMode(.template)
-            .resizable()
-            .scaledToFit()
-            .frame(width: 18, height: 18)
+    VStack(spacing: 10) {
+      Button {
+        Task { await persistOnly() }
+      } label: {
+        HStack(spacing: 8) {
+          if isPersistingOnly {
+            ProgressView().tint(AppColors.primaryActionForeground)
+          } else {
+            Text("Save Highlight")
+            Image(systemName: "bookmark.fill")
+              .font(.system(size: 16, weight: .semibold))
+          }
         }
-
       }
+      .buttonStyle(LectorPrimaryCapsuleButtonStyle())
+      .disabled(isSaving || isPersistingOnly)
+      .opacity((isSaving || isPersistingOnly) ? 0.7 : 1.0)
+
+      Button {
+        Task { await shareOrSave() }
+      } label: {
+        HStack(spacing: 8) {
+          if isSaving {
+            ProgressView().tint(AppColors.primaryActionForeground)
+          } else {
+            Text("Share Highlight")
+            Image("ActionShare")
+              .renderingMode(.template)
+              .resizable()
+              .scaledToFit()
+              .frame(width: 18, height: 18)
+          }
+        }
+      }
+      .buttonStyle(LectorPrimaryCapsuleButtonStyle())
+      .disabled(isSaving || isPersistingOnly)
+      .opacity((isSaving || isPersistingOnly) ? 0.7 : 1.0)
     }
-    .buttonStyle(LectorPrimaryCapsuleButtonStyle())
-    .disabled(isSaving)
-    .opacity(isSaving ? 0.7 : 1.0)
+  }
+
+  private func persistOnly() async {
+    guard !isPersistingOnly, !isSaving else { return }
+    isPersistingOnly = true
+    defer { isPersistingOnly = false }
+
+    guard let documentID, !documentID.isEmpty else { return }
+    let trimmed = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+
+    do {
+      _ = try await highlightsService.createHighlight(
+        documentID: documentID,
+        quote: trimmed,
+        pageNumber: pageNumber,
+        progress: progress
+      )
+
+      toastMessage = "Highlight saved."
+      withAnimation { showToast = true }
+      try? await Task.sleep(nanoseconds: 1_250_000_000)
+      withAnimation { showToast = false }
+    } catch {
+      toastMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn’t save highlight."
+      withAnimation { showToast = true }
+      try? await Task.sleep(nanoseconds: 1_800_000_000)
+      withAnimation { showToast = false }
+    }
   }
 
   private func shareOrSave() async {

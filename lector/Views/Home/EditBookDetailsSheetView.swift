@@ -7,17 +7,15 @@ struct EditBookDetailsSheetView: View {
   let initialTitle: String
   let initialAuthor: String
   let initialTag: String
-  let initialColor: BookCardColor
 
   let onCancel: () -> Void
-  let onSave: (_ title: String, _ author: String, _ tag: String, _ color: BookCardColor) -> Void
+  let onSave: (_ title: String, _ author: String, _ tag: String) -> Void
   let onDeleteTag: ((String) -> Void)?
   let onCreateTag: ((String) -> Void)?
 
   @State private var title: String
   @State private var author: String
   @State private var tag: String
-  @State private var selectedColor: BookCardColor
   @State private var didAutoSaveOnDisappear: Bool = false
   @State private var didManualSave: Bool = false
   @State private var localAvailableTags: [String]
@@ -28,10 +26,9 @@ struct EditBookDetailsSheetView: View {
     initialTitle: String,
     initialAuthor: String,
     initialTag: String,
-    initialColor: BookCardColor,
     onCancel: @escaping () -> Void,
     onSave:
-      @escaping (_ title: String, _ author: String, _ tag: String, _ color: BookCardColor) -> Void,
+      @escaping (_ title: String, _ author: String, _ tag: String) -> Void,
     onDeleteTag: ((String) -> Void)? = nil,
     onCreateTag: ((String) -> Void)? = nil
   ) {
@@ -40,7 +37,6 @@ struct EditBookDetailsSheetView: View {
     self.initialTitle = initialTitle
     self.initialAuthor = initialAuthor
     self.initialTag = initialTag
-    self.initialColor = initialColor
     self.onCancel = onCancel
     self.onSave = onSave
     self.onDeleteTag = onDeleteTag
@@ -49,7 +45,6 @@ struct EditBookDetailsSheetView: View {
     _title = State(initialValue: initialTitle)
     _author = State(initialValue: initialAuthor)
     _tag = State(initialValue: initialTag)
-    _selectedColor = State(initialValue: initialColor)
     _localAvailableTags = State(initialValue: availableTags)
   }
 
@@ -63,15 +58,6 @@ struct EditBookDetailsSheetView: View {
             field(title: "Author", placeholder: "Author", text: $author)
             Divider().opacity(0.15)
             tagField
-          }
-
-          sectionCard {
-            Text("Card color")
-              .font(.parkinsansSemibold(size: 14))
-              .foregroundStyle(
-                colorScheme == .dark ? Color.white.opacity(0.85) : AppColors.matteBlack)
-
-            colorPickerRow
           }
         }
         .padding(.horizontal, 18)
@@ -123,11 +109,10 @@ struct EditBookDetailsSheetView: View {
       trimmedTitle != initialTitle.trimmingCharacters(in: .whitespacesAndNewlines)
       || trimmedAuthor != initialAuthor.trimmingCharacters(in: .whitespacesAndNewlines)
       || trimmedTag != initialTag.trimmingCharacters(in: .whitespacesAndNewlines)
-      || selectedColor != initialColor
 
     guard didChange else { return false }
     didManualSave = true
-    onSave(trimmedTitle, trimmedAuthor, trimmedTag, selectedColor)
+    onSave(trimmedTitle, trimmedAuthor, trimmedTag)
     return true
   }
 
@@ -251,39 +236,4 @@ struct EditBookDetailsSheetView: View {
       )
   }
 
-  private var colorPickerRow: some View {
-    let options = BookCardColor.allCases
-    return ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: 12) {
-        ForEach(options) { option in
-          Button {
-            selectedColor = option
-          } label: {
-            ZStack {
-              Circle()
-                .fill(option.color(for: colorScheme))
-                .frame(width: 34, height: 34)
-                .overlay(
-                  Circle()
-                    .stroke(
-                      colorScheme == .dark
-                        ? Color.white.opacity(0.18) : Color(.separator).opacity(0.35),
-                      lineWidth: 1
-                    )
-                )
-
-              if selectedColor == option {
-                Image(systemName: "checkmark")
-                  .font(.system(size: 12, weight: .bold))
-                  .foregroundStyle(
-                    colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
-              }
-            }
-          }
-          .buttonStyle(.plain)
-          .accessibilityLabel(option.displayName)
-        }
-      }
-    }
-  }
 }

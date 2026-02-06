@@ -102,7 +102,8 @@ struct FavoritesView: View {
                   book: book,
                   onOpen: { selectedBook = book },
                   onToggleRead: { viewModel.toggleRead(bookID: book.id) },
-                  onToggleFavorite: { viewModel.toggleFavorite(bookID: book.id) }
+                  onToggleFavorite: { viewModel.toggleFavorite(bookID: book.id) },
+                  showsOptionsMenu: false
                 )
               }
             }

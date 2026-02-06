@@ -13,6 +13,8 @@ struct Book: Identifiable, Hashable {
   let remoteID: String?
   var title: String
   var author: String
+  /// Backend `created_at` (used for "Recently added").
+  let createdAt: Date?
   var pagesTotal: Int
   var currentPage: Int
   /// Optional backend progress (0..1). Used for continuous scroll resume/progress.
@@ -30,6 +32,7 @@ struct Book: Identifiable, Hashable {
     remoteID: String? = nil,
     title: String,
     author: String,
+    createdAt: Date? = nil,
     pagesTotal: Int,
     currentPage: Int,
     readingProgress: Double? = nil,
@@ -44,6 +47,7 @@ struct Book: Identifiable, Hashable {
     self.remoteID = remoteID
     self.title = title
     self.author = author
+    self.createdAt = createdAt
     self.pagesTotal = pagesTotal
     self.currentPage = currentPage
     self.readingProgress = readingProgress
@@ -80,6 +84,38 @@ struct Book: Identifiable, Hashable {
       ?? Calendar.current.date(byAdding: .day, value: -lastOpenedDaysAgo, to: Date())
       ?? .distantPast
   }
+
+  var createdSortDate: Date {
+    createdAt ?? .distantPast
+  }
+
+  // MARK: - Status helpers (Completed / Reading)
+
+  var completedAt: Date? {
+    // Best available approximation: when the backend reading position was last updated
+    // while the book is at 100%.
+    guard isRead else { return nil }
+    return lastOpenedAt
+  }
+
+  var completionStatusText: String? {
+    guard let completedAt else { return nil }
+    return "Completed \(Self.statusDateFormatter.string(from: completedAt))"
+  }
+
+  var readingStatusText: String? {
+    // Treat very small progress as "not started" to avoid noisy "Reading 0%".
+    let pct = Int((progress * 100).rounded())
+    guard pct >= 2 && pct <= 99 else { return nil }
+    return "Reading \(pct)%"
+  }
+
+  private static let statusDateFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = "MMM d"
+    return f
+  }()
 
   var progress: Double {
     let pageProgress: Double = {
