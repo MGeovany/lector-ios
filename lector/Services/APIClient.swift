@@ -146,8 +146,8 @@ final class APIClient {
   private static let defaultSession: URLSession = {
     let config = URLSessionConfiguration.ephemeral
     config.waitsForConnectivity = false
-    config.timeoutIntervalForRequest = 20
-    // Leave timeoutIntervalForResource at default so large transfers (PDF upload, optimized doc download) can complete on slow networks.
+    config.timeoutIntervalForRequest = 35
+    // Leave timeoutIntervalForResource at default so large transfers (PDF upload, optimized doc download) can complete on slow networks. 35s tolerates Cloud Run cold start.
     return URLSession(configuration: config)
   }()
 
@@ -242,7 +242,7 @@ final class APIClient {
     var request = URLRequest(url: url)
     request.httpMethod = method
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-    request.timeoutInterval = 30
+    request.timeoutInterval = 35
     return request
   }
 

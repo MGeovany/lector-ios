@@ -104,7 +104,7 @@ struct ReaderContentScrollView: View {
                 .padding(.top, 44)
                 .padding(.bottom, bottomContentPadding)
             } else if viewModel.loadErrorMessage != nil {
-              ReaderConnectionErrorView()
+              ReaderConnectionErrorView(detailMessage: viewModel.loadErrorMessage)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.top, 44)
                 .padding(.bottom, bottomContentPadding)

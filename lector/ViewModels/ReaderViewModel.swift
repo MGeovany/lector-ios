@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import UIKit
 
 @MainActor
 final class ReaderViewModel: ObservableObject {
@@ -44,7 +43,9 @@ final class ReaderViewModel: ObservableObject {
     }
 
     // Offline-first: prefer cached optimized pages.
-    if let cached = OptimizedPagesStore.loadPages(remoteID: id, expectedChecksum: nil), !cached.isEmpty {
+    if let cached = OptimizedPagesStore.loadPages(remoteID: id, expectedChecksum: nil),
+      !cached.isEmpty
+    {
       setPages(cached, initialPage: book.currentPage)
 
       // If the user pinned this doc for offline, refresh in background when possible.
@@ -84,52 +85,33 @@ final class ReaderViewModel: ObservableObject {
     do {
       // Prefer optimized offline-first payload.
       // Backend may return partial pages while still `processing`.
-      var opt = try await documentsService.getOptimizedDocument(id: id)
-
-      if let pages = opt.pages, !pages.isEmpty {
-        setPages(pages, initialPage: book.currentPage)
-        isLoading = false
-        loadErrorMessage = nil
-        watchdog.cancel()
-        if OfflinePinStore.isPinned(remoteID: id) {
-          try? OptimizedPagesStore.savePages(
-            remoteID: id,
-            pages: pages,
-            optimizedVersion: opt.optimizedVersion,
-            optimizedChecksumSHA256: opt.optimizedChecksumSHA256
-          )
-        }
-        return
+      // Retry once on network error (e.g. Cloud Run cold start timeout).
+      var opt: RemoteOptimizedDocument?
+      do {
+        opt = try await documentsService.getOptimizedDocument(id: id)
+      } catch APIError.network {
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        opt = try await documentsService.getOptimizedDocument(id: id)
+      } catch APIError.server(let statusCode, _) where statusCode == 404 {
+        // Backend revision doesn't support `/documents/{id}/optimized` yet.
+        opt = nil
       }
 
-      if opt.processingStatus == "failed" {
-        loadErrorMessage = "Failed to process."
-        isLoading = false
-        watchdog.cancel()
-        setPages([""], initialPage: 1)
-        return
-      }
-
-      if opt.processingStatus != "ready" {
-        loadErrorMessage = "Preparing your document…"
-        let maxWaitSeconds: Int = 12
-        let intervalSeconds: Int = 2
-        var waited: Int = 0
-
-        while opt.processingStatus != "ready", opt.processingStatus != "failed", waited < maxWaitSeconds {
-          try? await Task.sleep(nanoseconds: UInt64(intervalSeconds) * 1_000_000_000)
-          waited += intervalSeconds
-          loadErrorMessage = "Preparing your document…"
-          if let next = try? await documentsService.getOptimizedDocument(id: id) {
-            opt = next
+      if var opt = opt {
+        if let pages = opt.pages, !pages.isEmpty {
+          setPages(pages, initialPage: book.currentPage)
+          isLoading = false
+          loadErrorMessage = nil
+          watchdog.cancel()
+          if OfflinePinStore.isPinned(remoteID: id) {
+            try? OptimizedPagesStore.savePages(
+              remoteID: id,
+              pages: pages,
+              optimizedVersion: opt.optimizedVersion,
+              optimizedChecksumSHA256: opt.optimizedChecksumSHA256
+            )
           }
-          if let pages = opt.pages, !pages.isEmpty {
-            setPages(pages, initialPage: book.currentPage)
-            isLoading = false
-            loadErrorMessage = nil
-            watchdog.cancel()
-            return
-          }
+          return
         }
 
         if opt.processingStatus == "failed" {
@@ -140,10 +122,43 @@ final class ReaderViewModel: ObservableObject {
           return
         }
 
-        // Keep the loader up; backend continues processing.
-        loadErrorMessage = "Still preparing…"
-        watchdog.cancel()
-        return
+        if opt.processingStatus != "ready" {
+          loadErrorMessage = "Preparing your document…"
+          let maxWaitSeconds: Int = 12
+          let intervalSeconds: Int = 2
+          var waited: Int = 0
+
+          while opt.processingStatus != "ready", opt.processingStatus != "failed",
+            waited < maxWaitSeconds
+          {
+            try? await Task.sleep(nanoseconds: UInt64(intervalSeconds) * 1_000_000_000)
+            waited += intervalSeconds
+            loadErrorMessage = "Preparing your document…"
+            if let next = try? await documentsService.getOptimizedDocument(id: id) {
+              opt = next
+            }
+            if let pages = opt.pages, !pages.isEmpty {
+              setPages(pages, initialPage: book.currentPage)
+              isLoading = false
+              loadErrorMessage = nil
+              watchdog.cancel()
+              return
+            }
+          }
+
+          if opt.processingStatus == "failed" {
+            loadErrorMessage = "Failed to process."
+            isLoading = false
+            watchdog.cancel()
+            setPages([""], initialPage: 1)
+            return
+          }
+
+          // Keep the loader up; backend continues processing.
+          loadErrorMessage = "Still preparing…"
+          watchdog.cancel()
+          return
+        }
       }
 
       // Fallback (older docs/backends): fetch full content and paginate.
@@ -177,7 +192,9 @@ final class ReaderViewModel: ObservableObject {
       isLoading = false
       watchdog.cancel()
     } catch {
-      if let cached = OptimizedPagesStore.loadPages(remoteID: id, expectedChecksum: nil), !cached.isEmpty {
+      if let cached = OptimizedPagesStore.loadPages(remoteID: id, expectedChecksum: nil),
+        !cached.isEmpty
+      {
         setPages(cached, initialPage: book.currentPage)
         loadErrorMessage = nil
         isLoading = false
@@ -189,7 +206,15 @@ final class ReaderViewModel: ObservableObject {
         loadErrorMessage = "Not downloaded"
         setPages(
           [
-            "This book isn't available offline yet. Turn on Offline while the server is reachable, then try again.",
+            "This book isn't available offline yet. Turn on Offline while the server is reachable, then try again."
+          ],
+          initialPage: 1
+        )
+      } else if case APIError.server(let status, _) = error, status == 404 {
+        loadErrorMessage = "Not found"
+        setPages(
+          [
+            "This document couldn't be found on the server. It may have been deleted or you may need to refresh your library."
           ],
           initialPage: 1
         )
@@ -197,7 +222,7 @@ final class ReaderViewModel: ObservableObject {
         loadErrorMessage = "Can't connect"
         setPages(
           [
-            "Couldn't reach the server to load this book. Check your connection and try again.",
+            "Couldn't reach the server to load this book. Check your connection and try again."
           ],
           initialPage: 1
         )
