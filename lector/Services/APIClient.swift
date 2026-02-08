@@ -270,7 +270,8 @@ final class APIClient {
   ) async throws -> T {
     do {
       #if DEBUG
-        let shouldLog = request.url?.path.contains("/documents/") == true
+        let shouldLog =
+          request.url?.path.contains("/documents/") == true
           && request.url?.path.contains("/optimized") == true
         let startedAt = Date()
         if shouldLog {
@@ -402,7 +403,8 @@ final class APIClient {
       throw apiError
     } catch {
       #if DEBUG
-        let shouldLog = request.url?.path.contains("/documents/") == true
+        let shouldLog =
+          request.url?.path.contains("/documents/") == true
           && request.url?.path.contains("/optimized") == true
         if shouldLog {
           print(

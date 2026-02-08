@@ -100,9 +100,9 @@ struct ReaderContentScrollView: View {
               ReaderLoadingView(
                 subtitle: viewModel.loadErrorMessage ?? "This usually takes a few seconds."
               )
-                .padding(.horizontal, horizontalPadding)
-                .padding(.top, 44)
-                .padding(.bottom, bottomContentPadding)
+              .padding(.horizontal, horizontalPadding)
+              .padding(.top, 44)
+              .padding(.bottom, bottomContentPadding)
             } else if viewModel.loadErrorMessage != nil {
               ReaderConnectionErrorView(detailMessage: viewModel.loadErrorMessage)
                 .padding(.horizontal, horizontalPadding)
