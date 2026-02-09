@@ -553,10 +553,10 @@ private struct HighlightCardView: View {
 
     VStack(alignment: .leading, spacing: 12) {
       Text("Lector")
-        .font(.custom("CinzelDecorative-Bold", size: 16))
+        .font(.custom("CinzelDecorative-Bold", size: 22))
         .foregroundStyle(primary)
         .lineLimit(1)
-        .padding(.bottom, 14)
+        .padding(.bottom, 16)
         .padding(.leading, 20)
 
       HStack(alignment: .top, spacing: 16) {
