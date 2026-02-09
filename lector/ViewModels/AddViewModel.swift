@@ -9,6 +9,7 @@ final class AddViewModel {
   var alertMessage: String?
   var infoMessage: String?
   var didUploadSuccessfully: Bool = false
+  var lastUploadedRemoteID: String?
 
   private let documentsService: DocumentsServicing
   private let userID: String
@@ -24,6 +25,7 @@ final class AddViewModel {
   func uploadPickedDocument(_ url: URL) async {
     isUploading = true
     didUploadSuccessfully = false
+    lastUploadedRemoteID = nil
     defer { isUploading = false }
 
     do {
@@ -43,14 +45,27 @@ final class AddViewModel {
 
       try await validateQuotaAndSize(nextFileBytes: Int64(fileData.count))
 
-      _ = try await documentsService.uploadDocument(
+      let uploaded = try await documentsService.uploadDocument(
         fileData: fileData,
         fileName: fileName,
         mimeType: Self.mimeType(for: url) ?? "application/octet-stream"
       )
 
       didUploadSuccessfully = true
+      lastUploadedRemoteID = uploaded.id
       NotificationCenter.default.post(name: .documentsDidChange, object: nil)
+      NotificationCenter.default.post(
+        name: .openReaderForUploadedDocument,
+        object: nil,
+        userInfo: [
+          "remoteID": uploaded.id,
+          "title": uploaded.title,
+          "author": uploaded.author ?? "",
+          "pagesTotal": uploaded.metadata.pageCount ?? 1,
+          "createdAt": uploaded.createdAt,
+          "sizeBytes": uploaded.originalSizeBytes ?? uploaded.metadata.fileSize ?? 0,
+        ]
+      )
     } catch {
       alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to upload document."
     }
@@ -157,4 +172,5 @@ final class AddViewModel {
 
 extension Notification.Name {
   static let documentsDidChange = Notification.Name("documentsDidChange")
+  static let openReaderForUploadedDocument = Notification.Name("openReaderForUploadedDocument")
 }

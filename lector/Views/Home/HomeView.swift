@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct HomeView: View {
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.locale) private var locale
   @State private var viewModel: HomeViewModel
   @State private var addViewModel: AddViewModel = AddViewModel()
   @State private var showFilePicker: Bool = false
@@ -10,6 +11,8 @@ struct HomeView: View {
   @State private var toast: UploadToastData?
   @StateObject private var networkMonitor = NetworkMonitor.shared
   @State private var selectedSection: LibrarySection = .allBooks
+  @State private var isPreparingToOpenUploadedDoc: Bool = false
+  @State private var prepareOpenTask: Task<Void, Never>?
   
   private static let allowedImportTypes: [UTType] = {
     var types: [UTType] = [.pdf]
@@ -42,7 +45,7 @@ struct HomeView: View {
           .padding(.top, 14)
 
           if !networkMonitor.isOnline {
-            Text("Offline — showing cached library.")
+            Text(L10n.tr("Offline — showing cached library.", locale: locale))
               .font(.system(size: 13, weight: .regular))
               .foregroundStyle(.secondary)
               .frame(maxWidth: .infinity, alignment: .center)
@@ -81,17 +84,64 @@ struct HomeView: View {
         )
       }
       .alert(
-        "Error",
+        L10n.tr("Error", locale: locale),
         isPresented: Binding(
           get: { viewModel.alertMessage != nil },
           set: { newValue in if !newValue { viewModel.alertMessage = nil } }
         )
       ) {
-        Button("OK", role: .cancel) {}
+        Button(L10n.tr("OK", locale: locale), role: .cancel) {}
       } message: {
         Text(viewModel.alertMessage ?? "")
       }
       .onAppear { viewModel.onAppear() }
+      .onReceive(NotificationCenter.default.publisher(for: .openReaderForUploadedDocument)) { note in
+        let remoteID = note.userInfo?["remoteID"] as? String
+        guard let remoteID, !remoteID.isEmpty else { return }
+
+        // Show a loading overlay while the backend finishes processing.
+        prepareOpenTask?.cancel()
+        isPreparingToOpenUploadedDoc = true
+
+        // Navigate as soon as possible. Prefer the real book from the library list if present.
+        let loc = Locale(identifier: (UserDefaults.standard.string(forKey: AppPreferenceKeys.language) ?? AppLanguage.english.rawValue) == AppLanguage.spanish.rawValue ? "es" : "en")
+        let title = (note.userInfo?["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Document", locale: loc)
+        let author = (note.userInfo?["author"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Unknown", locale: loc)
+        let pagesTotal = max(1, (note.userInfo?["pagesTotal"] as? Int) ?? 1)
+        let createdAt = note.userInfo?["createdAt"] as? Date
+        let sizeBytes = (note.userInfo?["sizeBytes"] as? Int64) ?? 0
+        let stableID = UUID(uuidString: remoteID) ?? UUID()
+
+        prepareOpenTask = Task { @MainActor in
+          _ = await viewModel.waitForOptimizedReady(documentID: remoteID)
+          isPreparingToOpenUploadedDoc = false
+
+          if let existing = viewModel.books.first(where: { $0.remoteID == remoteID }) {
+            viewModel.selectedBook = existing
+            return
+          }
+
+          viewModel.selectedBook = Book(
+            id: stableID,
+            remoteID: remoteID,
+            title: title,
+            author: author,
+            createdAt: createdAt,
+            pagesTotal: pagesTotal,
+            currentPage: 1,
+            readingProgress: nil,
+            sizeBytes: sizeBytes,
+            lastOpenedAt: Date(),
+            lastOpenedDaysAgo: 0,
+            isRead: false,
+            isFavorite: false,
+            tags: []
+          )
+
+          // Kick a reload so the placeholder gets replaced by the real model quickly.
+          Task { await viewModel.reload() }
+        }
+      }
       .environment(viewModel)
     }
     .onAppear {
@@ -137,6 +187,23 @@ struct HomeView: View {
         UploadToastView(toast: toast)
           .padding(.top, 8)
           .transition(.move(edge: .top).combined(with: .opacity))
+      }
+    }
+    .overlay {
+      if isPreparingToOpenUploadedDoc {
+        ZStack {
+          Color.black.opacity(0.18).ignoresSafeArea()
+          VStack(spacing: 10) {
+            ProgressView()
+            Text("Preparing your document…")
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
+          }
+          .padding(.horizontal, 16)
+          .padding(.vertical, 14)
+          .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .transition(.opacity)
       }
     }
     .onChange(of: addViewModel.didUploadSuccessfully) { _, didSucceed in
@@ -279,6 +346,7 @@ private struct LibrarySectionPageView: View {
 
 private struct CurrentLibraryDashboardView: View {
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.locale) private var locale
   @Environment(HomeViewModel.self) private var viewModel
 
   var body: some View {
@@ -291,21 +359,21 @@ private struct CurrentLibraryDashboardView: View {
         .sorted { $0.createdSortDate > $1.createdSortDate }
         .prefix(12)
 
-      sectionHeader("RESUME READING")
+      sectionHeader(L10n.tr("RESUME READING", locale: locale))
 
       if let resume {
         ResumeReadingCardView(book: resume, onContinue: { viewModel.selectedBook = resume })
       } else {
-        EmptyInlineHint(text: "Start reading a book and it will show up here.")
+        EmptyInlineHint(text: L10n.tr("Start reading a book and it will show up here.", locale: locale))
       }
 
       if !nextUp.isEmpty {
-        sectionHeader("NEXT UP")
+        sectionHeader(L10n.tr("NEXT UP", locale: locale))
         NextUpRowView(books: nextUp, onOpen: { viewModel.selectedBook = $0 })
       }
 
       if !recentlyAdded.isEmpty {
-        sectionHeader("RECENTLY ADDED")
+        sectionHeader(L10n.tr("RECENTLY ADDED", locale: locale))
         VStack(spacing: 0) {
           ForEach(Array(recentlyAdded)) { book in
             RecentlyAddedRowView(book: book, onOpen: { viewModel.selectedBook = book })
@@ -328,6 +396,7 @@ private struct ResumeReadingCardView: View {
   let book: Book
   let onContinue: () -> Void
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.locale) private var locale
 
   var body: some View {
     Button(action: onContinue) {
@@ -349,7 +418,7 @@ private struct ResumeReadingCardView: View {
           }
 
           HStack {
-            Text("PAGE \(book.currentPage) OF \(book.pagesTotal)")
+            Text(String(format: L10n.tr("PAGE %d OF %d", locale: locale), book.currentPage, book.pagesTotal))
               .font(.parkinsansSemibold(size: 13))
               .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : AppColors.matteBlack.opacity(0.55))
 
@@ -365,7 +434,7 @@ private struct ResumeReadingCardView: View {
             .padding(.top, 2)
 
           HStack {
-            Text("CONTINUE")
+            Text(L10n.tr("CONTINUE", locale: locale))
               .font(.parkinsansSemibold(size: 14))
               .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.80) : AppColors.matteBlack)
               .underline()
@@ -441,6 +510,7 @@ private struct NextUpTileView: View {
   let book: Book
   let onOpen: () -> Void
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.locale) private var locale
 
   var body: some View {
     Button(action: onOpen) {
@@ -456,7 +526,7 @@ private struct NextUpTileView: View {
           .lineLimit(1)
 
         HStack {
-          Text("PAGE \(book.currentPage) / \(book.pagesTotal)")
+          Text(String(format: L10n.tr("PAGE %d OF %d", locale: locale), book.currentPage, book.pagesTotal))
           Spacer()
           Text("\(Int((book.progress * 100).rounded()))%")
         }
@@ -489,6 +559,7 @@ private struct RecentlyAddedRowView: View {
   let book: Book
   let onOpen: () -> Void
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.locale) private var locale
 
   var body: some View {
     Button(action: onOpen) {
@@ -504,7 +575,7 @@ private struct RecentlyAddedRowView: View {
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
             .lineLimit(1)
 
-          Text("\(book.pagesTotal) pages")
+          Text(String(format: L10n.tr("%d pages", locale: locale), book.pagesTotal))
             .font(.parkinsans(size: 12, weight: .medium))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
             .lineLimit(1)
@@ -549,6 +620,7 @@ private struct EmptyInlineHint: View {
 private struct LibrarySectionEmptyStateView: View {
   let section: LibrarySection
   let colorScheme: ColorScheme
+  @Environment(\.locale) private var locale
 
   var body: some View {
     VStack(spacing: 12) {
@@ -581,21 +653,25 @@ private struct LibrarySectionEmptyStateView: View {
   }
 
   private var title: String {
+    let key: String
     switch section {
-    case .allBooks: return "No books"
-    case .current: return "Nothing in progress"
-    case .toRead: return "Nothing to read yet"
-    case .finished: return "No finished books"
+    case .allBooks: key = "No books"
+    case .current: key = "Nothing in progress"
+    case .toRead: key = "Nothing to read yet"
+    case .finished: key = "No finished books"
     }
+    return L10n.tr(key, locale: locale)
   }
 
   private var subtitle: String {
+    let key: String
     switch section {
-    case .allBooks: return "Add a book to get started."
-    case .current: return "Start reading a book and it will show up here."
-    case .toRead: return "Books you haven't started will appear here."
-    case .finished: return "Finish a book and it will show up here."
+    case .allBooks: key = "Add a book to get started."
+    case .current: key = "Start reading a book and it will show up here."
+    case .toRead: key = "Books you haven't started will appear here."
+    case .finished: key = "Finish a book and it will show up here."
     }
+    return L10n.tr(key, locale: locale)
   }
 
   private var titleColor: Color {
@@ -614,13 +690,14 @@ private struct LibrarySectionEmptyStateView: View {
 private struct EmptyLibraryPlaceholderView: View {
   let colorScheme: ColorScheme
   let onAddTapped: () -> Void
+  @Environment(\.locale) private var locale
 
   var body: some View {
     GeometryReader { geometry in
       VStack(spacing: 14) {
         Spacer()
 
-        Text("How about to start with a book?")
+        Text(L10n.tr("How about to start with a book?", locale: locale))
           .font(.parkinsans(size: 20, weight: .light))
           .foregroundStyle(
             colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack.opacity(0.90)
@@ -633,7 +710,7 @@ private struct EmptyLibraryPlaceholderView: View {
           onAddTapped()
         } label: {
           HStack(spacing: 10) {
-            Text("Add File")
+            Text(L10n.tr("Add File", locale: locale))
             Image(systemName: "plus.circle.fill")
           }
 
@@ -666,6 +743,7 @@ private struct EmptyLibraryPlaceholderView: View {
 
 private struct EmptySearchPlaceholderView: View {
   let colorScheme: ColorScheme
+  @Environment(\.locale) private var locale
 
   var body: some View {
     VStack(spacing: 12) {
@@ -674,11 +752,11 @@ private struct EmptySearchPlaceholderView: View {
         .foregroundStyle(iconColor)
         .padding(.bottom, 2)
 
-      Text("No results")
+      Text(L10n.tr("No results", locale: locale))
         .font(.parkinsans(size: 18, weight: .semibold))
         .foregroundStyle(titleColor)
 
-      Text("Try a different search term.")
+      Text(L10n.tr("Try a different search term.", locale: locale))
         .font(.parkinsans(size: 14, weight: .medium))
         .foregroundStyle(subtitleColor)
     }

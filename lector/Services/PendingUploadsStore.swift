@@ -85,6 +85,19 @@ enum PendingUploadsStore {
     return item
   }
 
+  /// Enqueues a file picked from Files / "Open in…", handling security-scoped URLs.
+  static func enqueue(fileURL: URL) throws -> PendingUpload {
+    let needsSecurity = fileURL.startAccessingSecurityScopedResource()
+    defer {
+      if needsSecurity {
+        fileURL.stopAccessingSecurityScopedResource()
+      }
+    }
+    let data = try Data(contentsOf: fileURL)
+    let fileName = fileURL.lastPathComponent.isEmpty ? "document" : fileURL.lastPathComponent
+    return try enqueue(fileData: data, fileName: fileName)
+  }
+
   static func loadData(id: String) throws -> Data {
     let base = try baseDir(create: false)
     let url = resolveDataURL(baseDir: base, id: id)

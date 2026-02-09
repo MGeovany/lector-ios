@@ -26,7 +26,7 @@ struct ProfileView: View {
   private let documentsService: DocumentsServicing = GoDocumentsService()
   private let api: APIClient = APIClient()
 
-  @AppStorage(AppPreferenceKeys.language) private var languageRawValue: String = AppLanguage.english
+  // @AppStorage(AppPreferenceKeys.language) private var languageRawValue: String = AppLanguage.english // Used by Language row (commented out)
     .rawValue
   @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
   @AppStorage(AppPreferenceKeys.accountDisabled) private var accountDisabled: Bool = false
@@ -143,16 +143,17 @@ struct ProfileView: View {
         }
 
         Section("Preferences") {
-          NavigationLink {
-            LanguageSelectionView()
-          } label: {
-            SettingsRowView(
-              icon: "globe",
-              title: "Language",
-              trailingText: (AppLanguage(rawValue: languageRawValue) ?? .english).title,
-              showsChevron: false
-            )
-          }
+          // Language option — commented out for now.
+          // NavigationLink {
+          //   LanguageSelectionView()
+          // } label: {
+          //   SettingsRowView(
+          //     icon: "globe",
+          //     title: "Language",
+          //     trailingText: (AppLanguage(rawValue: languageRawValue) ?? .english).title,
+          //     showsChevron: false
+          //   )
+          // }
 
           NavigationLink {
             ThemeSelectionView()

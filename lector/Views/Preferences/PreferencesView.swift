@@ -10,6 +10,7 @@ import SwiftUI
 struct PreferencesView: View {
   @EnvironmentObject private var viewModel: PreferencesViewModel
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.locale) private var locale
   @State private var isShowingContinuousScrollInfo: Bool = false
 
   var body: some View {
@@ -32,7 +33,7 @@ struct PreferencesView: View {
 
               PreferenceSectionCard(
                 icon: "moon.circle",
-                title: "Theme",
+                title: L10n.tr("Theme", locale: locale),
                 subtitle: ""
               ) {
                 ThemePickerView(theme: $viewModel.theme)
@@ -40,14 +41,14 @@ struct PreferencesView: View {
 
               PreferenceSectionCard(
                 icon: "textformat.size",
-                title: "Typography",
+                title: L10n.tr("Typography", locale: locale),
                 subtitle: ""
               ) {
                 VStack(alignment: .leading, spacing: 10) {
                   FontPickerView(font: $viewModel.font)
 
                   SizeSliderView(
-                    title: "Size",
+                    title: L10n.tr("Size", locale: locale),
                     value: $viewModel.fontSize,
                     range: 14...26,
                     step: 1,
@@ -58,11 +59,11 @@ struct PreferencesView: View {
 
               PreferenceSectionCard(
                 icon: "arrow.up.and.down.text.horizontal",
-                title: "Layout",
+                title: L10n.tr("Layout", locale: locale),
                 subtitle: ""
               ) {
                 SizeSliderView(
-                  title: "Line spacing",
+                  title: L10n.tr("Line spacing", locale: locale),
                   value: $viewModel.lineSpacing,
                   range: 0.95...1.45,
                   step: 0.01,
@@ -72,12 +73,11 @@ struct PreferencesView: View {
 
               PreferenceSectionCard(
                 icon: "text.book.closed.fill",
-                title: "Reading",
-                subtitle:
-                  "Continuous scroll shows the book as one long page. It only applies to documents under \(ReaderLimits.continuousScrollMaxPages) pages."
+                title: L10n.tr("Reading", locale: locale),
+                subtitle: String(format: L10n.tr("Continuous scroll shows the book as one long page. It only applies to documents under %d pages.", locale: locale), ReaderLimits.continuousScrollMaxPages)
               ) {
                 Toggle(
-                  "Continuous scroll",
+                  L10n.tr("Continuous scroll", locale: locale),
                   isOn: $viewModel.continuousScrollForShortDocs
                 )
                 .font(.parkinsansSemibold(size: 13))
@@ -86,16 +86,16 @@ struct PreferencesView: View {
 
               PreferenceSectionCard(
                 icon: "highlighter",
-                title: "Highlights",
-                subtitle: "Show search matches in the text and choose their color."
+                title: L10n.tr("Highlights", locale: locale),
+                subtitle: L10n.tr("Show search matches in the text and choose their color.", locale: locale)
               ) {
                 VStack(alignment: .leading, spacing: 12) {
-                  Toggle("Show highlights in text", isOn: $viewModel.showHighlightsInText)
+                  Toggle(L10n.tr("Show highlights in text", locale: locale), isOn: $viewModel.showHighlightsInText)
                     .font(.parkinsansSemibold(size: 13))
                     .tint(preferencesAccent)
 
                   HStack(spacing: 8) {
-                    Text("Color")
+                    Text(L10n.tr("Color", locale: locale))
                       .font(.parkinsans(size: 13, weight: .medium))
                       .foregroundStyle(
                         colorScheme == .dark
@@ -132,7 +132,7 @@ struct PreferencesView: View {
               Button(role: .destructive, action: viewModel.restoreDefaults) {
                 HStack(spacing: 8) {
                   Image(systemName: "arrow.counterclockwise")
-                  Text("Restore defaults")
+                  Text(L10n.tr("Restore defaults", locale: locale))
                     .font(.parkinsansSemibold(size: 13))
                 }
                 .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.88) : .red)
@@ -186,19 +186,21 @@ struct PreferencesView: View {
       .onChange(of: viewModel.highlightColor) { _, _ in
         viewModel.save()
       }
-      .alert("Continuous scroll", isPresented: $isShowingContinuousScrollInfo) {
-        Button("Got it", role: .cancel) {}
+      .alert(L10n.tr("Continuous scroll", locale: locale), isPresented: $isShowingContinuousScrollInfo) {
+        Button(L10n.tr("Got it", locale: locale), role: .cancel) {}
       } message: {
         Text(
-          "This reads like an “infinite” page instead of paged swipes. It will only show in the reader for documents under \(ReaderLimits.continuousScrollMaxPages) pages."
+          String(format: L10n.tr("This reads like an \"infinite\" page instead of paged swipes. It will only show in the reader for documents under %d pages.", locale: locale), ReaderLimits.continuousScrollMaxPages)
         )
       }
     }
   }
 
   private var header: some View {
-    Text("Preferences")
+    Text(L10n.tr("Settings", locale: locale))
       .font(.parkinsansMedium(size: 70))
+      .lineLimit(1)
+      .minimumScaleFactor(0.6)
       .foregroundStyle(
         colorScheme == .dark ? Color.white.opacity(0.75) : AppColors.matteBlack)
   }

@@ -28,10 +28,19 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
   var id: String { rawValue }
 
+  /// Locale identifier used to force the app UI language.
+  /// Note: we intentionally keep `rawValue` stable (stored in UserDefaults).
+  var localeIdentifier: String {
+    switch self {
+    case .english: return "en"
+    case .spanish: return "es"
+    }
+  }
+
   var title: String {
     switch self {
     case .english: return "English"
-    case .spanish: return "Spanish (Soon)"
+    case .spanish: return "Español"
     }
   }
 }

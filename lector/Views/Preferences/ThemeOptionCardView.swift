@@ -4,6 +4,7 @@ struct ThemeOptionCardView: View {
   let option: ReadingTheme
   let isSelected: Bool
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.locale) private var locale
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -17,11 +18,11 @@ struct ThemeOptionCardView: View {
           )
 
         VStack(alignment: .leading, spacing: 2) {
-          Text(option.title)
+          Text(L10n.tr(option.title, locale: locale))
             .font(.parkinsansBold(size: CGFloat(14)))
             .foregroundStyle(
               colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
-          Text(option.subtitle)
+          Text(L10n.tr(option.subtitle, locale: locale))
             .font(.parkinsansSemibold(size: CGFloat(12)))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
         }
@@ -33,10 +34,10 @@ struct ThemeOptionCardView: View {
           .fill(option.surfaceBackground)
 
         VStack(alignment: .leading, spacing: 4) {
-          Text("Preview")
+          Text(L10n.tr("Preview", locale: locale))
             .font(.parkinsans(size: CGFloat(11), weight: .bold))
             .foregroundStyle(option.surfaceSecondaryText)
-          Text("Reading should feel calm.")
+          Text(L10n.tr("Reading should feel calm.", locale: locale))
             .font(.parkinsans(size: CGFloat(13), weight: .semibold))
             .foregroundStyle(option.surfaceText)
             .lineLimit(2)

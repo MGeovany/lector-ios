@@ -17,7 +17,7 @@ struct SettingsRowView: View {
             .fill(Color(.secondarySystemBackground))
         )
 
-      Text(title)
+      Text(LocalizedStringKey(title))
         .font(.parkinsans(size: CGFloat(15), weight: .regular))
         .foregroundStyle(.primary)
 

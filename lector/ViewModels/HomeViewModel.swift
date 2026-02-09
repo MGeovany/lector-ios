@@ -34,6 +34,39 @@ final class HomeViewModel {
       userID ?? KeychainStore.getString(account: KeychainKeys.userID) ?? APIConfig.defaultUserID
   }
 
+  /// Polls backend optimized status until it becomes `ready`, fails, or times out.
+  /// Returns true if it looks safe to open the reader now.
+  func waitForOptimizedReady(documentID: String, maxWaitSeconds: Int = 45) async -> Bool {
+    guard !documentID.isEmpty else { return true }
+    let intervalSeconds: Int = 2
+    var waited: Int = 0
+
+    while waited <= maxWaitSeconds {
+      do {
+        let meta = try await documentsService.getOptimizedDocumentMeta(id: documentID)
+        switch meta.processingStatus.lowercased() {
+        case "ready":
+          return true
+        case "failed":
+          return true // open anyway; reader will show an error message
+        default:
+          break
+        }
+      } catch APIError.server(let status, _) where status == 404 {
+        // Backend doesn't support optimized endpoint; open reader and fall back.
+        return true
+      } catch {
+        // Keep polling on transient errors.
+      }
+
+      try? await Task.sleep(nanoseconds: UInt64(intervalSeconds) * 1_000_000_000)
+      waited += intervalSeconds
+    }
+
+    // Timeout: open anyway; reader has its own loader.
+    return true
+  }
+
   func onAppear() {
     guard !didLoadOnce else { return }
     didLoadOnce = true

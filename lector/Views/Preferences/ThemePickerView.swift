@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ThemePickerView: View {
     @Binding var theme: ReadingTheme
+    @Environment(\.locale) private var locale
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -15,8 +16,8 @@ struct ThemePickerView: View {
                         ThemeOptionCardView(option: option, isSelected: option == theme)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(option.title)
-                    .accessibilityHint(option.subtitle)
+                    .accessibilityLabel(L10n.tr(option.title, locale: locale))
+                    .accessibilityHint(L10n.tr(option.subtitle, locale: locale))
                 }
             }
             .padding(.vertical, 2)
