@@ -449,7 +449,6 @@ struct ReaderView: View {
     .simultaneousGesture(
       DragGesture(minimumDistance: 16, coordinateSpace: .local)
         .onEnded { value in
-          guard focusEnabled else { return }
           guard !settings.isPresented else { return }
           guard !search.isVisible else { return }
           guard !highlight.isPresented else { return }
@@ -468,11 +467,11 @@ struct ReaderView: View {
             }
           }
 
-          // UX: swipe left = back, swipe right = forward (like most readers).
+          // UX: swipe right→left (left swipe) = next, left→right (right swipe) = back.
           if dx < -60 {
-            focusSwipeGoBackPage()
-          } else if dx > 60 {
             focusSwipeAdvancePage()
+          } else if dx > 60 {
+            focusSwipeGoBackPage()
           }
         }
     )

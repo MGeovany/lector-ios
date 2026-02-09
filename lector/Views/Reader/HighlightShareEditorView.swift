@@ -1,4 +1,3 @@
-import Photos
 import SwiftUI
 
 enum HighlightShareFormat: String, CaseIterable, Identifiable {
@@ -48,7 +47,7 @@ struct HighlightShareEditorView: View {
   @State private var isSaving: Bool = false
   @State private var isPersistingOnly: Bool = false
   @State private var showToast: Bool = false
-  @State private var toastMessage: String = "Image saved to Photos app"
+  @State private var toastMessage: String = "Couldn’t share image."
   @State private var shareImage: UIImage?
   @State private var showShareSheet: Bool = false
 
@@ -274,28 +273,9 @@ struct HighlightShareEditorView: View {
       )
       // Keep a reference for the share sheet.
       shareImage = img
-
-      // Start saving (we'll present share sheet immediately, but keep the button disabled
-      // until the save finishes to avoid duplicates).
-      let saveTask = Task {
-        try await PhotoLibrarySaver.save(image: img)
-      }
-
-      // Present the native iOS share sheet immediately (don't block on Photos permissions).
-      await MainActor.run {
-        showShareSheet = true
-      }
-
-      do {
-        try await saveTask.value
-        toastMessage = "Image saved to Photos app"
-      } catch {
-        toastMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn’t save to Photos."
-      }
-
-      withAnimation { showToast = true }
-      try? await Task.sleep(nanoseconds: 1_500_000_000)
-      withAnimation { showToast = false }
+      // Present the native iOS share sheet with all actions (Instagram, Save Image, etc).
+      // If the user picks "Save Image", iOS will save to Photos.
+      await MainActor.run { showShareSheet = true }
     } catch {
       toastMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn’t share image."
       // Show error toast
@@ -335,10 +315,7 @@ private struct ShareSheet: UIViewControllerRepresentable {
   let activityItems: [Any]
 
   func makeUIViewController(context: Context) -> UIActivityViewController {
-    let vc = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    // We already auto-save to Photos; exclude the "Save Image" action to prevent duplicates.
-    vc.excludedActivityTypes = [.saveToCameraRoll]
-    return vc
+    UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
   }
 
   func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
@@ -625,43 +602,6 @@ private struct HighlightCardView: View {
     )
     // Prevent the card from stretching vertically; keep it content-sized.
     .fixedSize(horizontal: false, vertical: true)
-  }
-}
-
-private enum PhotoLibrarySaverError: LocalizedError {
-  case notAuthorized
-
-  var errorDescription: String? {
-    switch self {
-    case .notAuthorized: return "Photos permission is required to save images."
-    }
-  }
-}
-
-private enum PhotoLibrarySaver {
-  static func save(image: UIImage) async throws {
-    let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-    guard status == .authorized || status == .limited else {
-      throw PhotoLibrarySaverError.notAuthorized
-    }
-
-    try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-      PHPhotoLibrary.shared().performChanges(
-        {
-          PHAssetChangeRequest.creationRequestForAsset(from: image)
-        },
-        completionHandler: { success, error in
-          if let error = error {
-            cont.resume(throwing: error)
-            return
-          }
-          if success {
-            cont.resume(returning: ())
-          } else {
-            cont.resume(throwing: PhotoLibrarySaverError.notAuthorized)
-          }
-        })
-    }
   }
 }
 

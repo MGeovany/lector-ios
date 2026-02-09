@@ -12,6 +12,8 @@ struct ReaderHighlightsSheetView: View {
 
   @State private var shareItems: [Any] = []
   @State private var isShowingShareSheet: Bool = false
+  @State private var shareSheetToken: Int = 0
+  @State private var shareInFlightHighlightID: String? = nil
   @State private var deletingID: String? = nil
 
   var body: some View {
@@ -55,8 +57,16 @@ struct ReaderHighlightsSheetView: View {
       .refreshable {
         await onRefresh()
       }
-      .sheet(isPresented: $isShowingShareSheet) {
+      .sheet(
+        isPresented: $isShowingShareSheet,
+        onDismiss: {
+          shareItems = []
+          shareInFlightHighlightID = nil
+        }
+      ) {
+        // Force re-creation when the payload changes to avoid presenting an empty sheet.
         ActivityShareSheet(items: shareItems)
+          .id(shareSheetToken)
       }
       .confirmationDialog(
         "Delete highlight?",
@@ -109,6 +119,11 @@ struct ReaderHighlightsSheetView: View {
   }
 
   private func share(highlight: RemoteHighlight) {
+    // Prevent rapid re-taps while rendering the share image.
+    if let inFlight = shareInFlightHighlightID, inFlight != highlight.id { return }
+    if shareInFlightHighlightID == highlight.id { return }
+    shareInFlightHighlightID = highlight.id
+
     let quote = highlight.quote.trimmingCharacters(in: .whitespacesAndNewlines)
     Task { @MainActor in
       do {
@@ -135,6 +150,12 @@ struct ReaderHighlightsSheetView: View {
         }
         shareItems = [parts.joined(separator: "\n")]
       }
+      guard !shareItems.isEmpty else {
+        shareInFlightHighlightID = nil
+        return
+      }
+      // Increment token so the controller is created with the latest items.
+      shareSheetToken &+= 1
       isShowingShareSheet = true
     }
   }
