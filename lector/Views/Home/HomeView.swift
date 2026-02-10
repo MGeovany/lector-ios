@@ -1,6 +1,6 @@
 import SwiftUI
-import UniformTypeIdentifiers
 import UIKit
+import UniformTypeIdentifiers
 
 struct HomeView: View {
   @Environment(\.colorScheme) private var colorScheme
@@ -14,11 +14,11 @@ struct HomeView: View {
   @State private var selectedSection: LibrarySection = .allBooks
   @State private var isPreparingToOpenUploadedDoc: Bool = false
   @State private var prepareOpenTask: Task<Void, Never>?
-  
+
   private static let allowedImportTypes: [UTType] = {
     var types: [UTType] = [.pdf]
     if let epub = UTType(filenameExtension: "epub") { types.append(epub) }
-    types.append(.plainText) // .txt
+    types.append(.plainText)  // .txt
     if let md = UTType(filenameExtension: "md") { types.append(md) }
     return types
   }()
@@ -85,11 +85,13 @@ struct HomeView: View {
               ProgressView()
               Text("Preparing your document…")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
+                .foregroundStyle(
+                  colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(
+              .ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
           }
           .transition(.opacity)
         }
@@ -171,81 +173,90 @@ struct HomeView: View {
   }
 
   @ViewBuilder
-  private func homeNavigationStack(viewModel: HomeViewModel, selectedBook: Binding<Book?>) -> some View {
+  private func homeNavigationStack(viewModel: HomeViewModel, selectedBook: Binding<Book?>)
+    -> some View
+  {
     NavigationStack {
       homeMainContent(viewModel: viewModel)
-      .toolbar(.hidden, for: .navigationBar)
-      .navigationDestination(item: selectedBook) { book in
-        ReaderView(
-          book: book,
-          onProgressChange: { page, total, progressOverride in
-            viewModel.updateBookProgress(
-              bookID: book.id,
-              page: page,
-              totalPages: total,
-              progressOverride: progressOverride
-            )
-          }
-        )
-      }
-      .alert(
-        L10n.tr("Error", locale: locale),
-        isPresented: Binding(
-          get: { viewModel.alertMessage != nil },
-          set: { newValue in if !newValue { viewModel.alertMessage = nil } }
-        )
-      ) {
-        Button(L10n.tr("OK", locale: locale), role: .cancel) {}
-      } message: {
-        Text(viewModel.alertMessage ?? "")
-      }
-      .onAppear { viewModel.onAppear() }
-      .onReceive(NotificationCenter.default.publisher(for: .openReaderForUploadedDocument)) { note in
-        let remoteID = note.userInfo?["remoteID"] as? String
-        guard let remoteID, !remoteID.isEmpty else { return }
-
-        let loc = Locale(identifier: (UserDefaults.standard.string(forKey: AppPreferenceKeys.language) ?? AppLanguage.english.rawValue) == AppLanguage.spanish.rawValue ? "es" : "en")
-        let title = (note.userInfo?["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Document", locale: loc)
-        let author = (note.userInfo?["author"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Unknown", locale: loc)
-        let pagesTotal = max(1, (note.userInfo?["pagesTotal"] as? Int) ?? 1)
-        let createdAt = note.userInfo?["createdAt"] as? Date
-        let sizeBytes = (note.userInfo?["sizeBytes"] as? Int64) ?? 0
-        let stableID = UUID(uuidString: remoteID) ?? UUID()
-
-        Task { @MainActor in
-          prepareOpenTask?.cancel()
-          isPreparingToOpenUploadedDoc = true
-          prepareOpenTask = Task { @MainActor in
-            _ = await viewModel.waitForOptimizedReady(documentID: remoteID)
-            isPreparingToOpenUploadedDoc = false
-
-            if let existing = viewModel.books.first(where: { $0.remoteID == remoteID }) {
-              viewModel.selectedBook = existing
-              return
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(item: selectedBook) { book in
+          ReaderView(
+            book: book,
+            onProgressChange: { page, total, progressOverride in
+              viewModel.updateBookProgress(
+                bookID: book.id,
+                page: page,
+                totalPages: total,
+                progressOverride: progressOverride
+              )
             }
+          )
+        }
+        .alert(
+          L10n.tr("Error", locale: locale),
+          isPresented: Binding(
+            get: { viewModel.alertMessage != nil },
+            set: { newValue in if !newValue { viewModel.alertMessage = nil } }
+          )
+        ) {
+          Button(L10n.tr("OK", locale: locale), role: .cancel) {}
+        } message: {
+          Text(viewModel.alertMessage ?? "")
+        }
+        .onAppear { viewModel.onAppear() }
+        .onReceive(NotificationCenter.default.publisher(for: .openReaderForUploadedDocument)) {
+          note in
+          let remoteID = note.userInfo?["remoteID"] as? String
+          guard let remoteID, !remoteID.isEmpty else { return }
 
-            viewModel.selectedBook = Book(
-              id: stableID,
-              remoteID: remoteID,
-              title: title,
-              author: author,
-              createdAt: createdAt,
-              pagesTotal: pagesTotal,
-              currentPage: 1,
-              readingProgress: nil,
-              sizeBytes: sizeBytes,
-              lastOpenedAt: Date(),
-              lastOpenedDaysAgo: 0,
-              isRead: false,
-              isFavorite: false,
-              tags: []
-            )
+          let loc = Locale(
+            identifier: (UserDefaults.standard.string(forKey: AppPreferenceKeys.language)
+              ?? AppLanguage.english.rawValue) == AppLanguage.spanish.rawValue ? "es" : "en")
+          let title =
+            (note.userInfo?["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            ?? L10n.tr("Document", locale: loc)
+          let author =
+            (note.userInfo?["author"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            ?? L10n.tr("Unknown", locale: loc)
+          let pagesTotal = max(1, (note.userInfo?["pagesTotal"] as? Int) ?? 1)
+          let createdAt = note.userInfo?["createdAt"] as? Date
+          let sizeBytes = (note.userInfo?["sizeBytes"] as? Int64) ?? 0
+          let stableID = UUID(uuidString: remoteID) ?? UUID()
 
-            Task { await viewModel.reload() }
+          Task { @MainActor in
+            prepareOpenTask?.cancel()
+            isPreparingToOpenUploadedDoc = true
+            prepareOpenTask = Task { @MainActor in
+              _ = await viewModel.waitForOptimizedReady(documentID: remoteID)
+              isPreparingToOpenUploadedDoc = false
+
+              if let existing = viewModel.books.first(where: { $0.remoteID == remoteID }) {
+                viewModel.selectedBook = existing
+                return
+              }
+
+              viewModel.selectedBook = Book(
+                id: stableID,
+                remoteID: remoteID,
+                title: title,
+                author: author,
+                createdAt: createdAt,
+                pagesTotal: pagesTotal,
+                currentPage: 1,
+                readingProgress: nil,
+                sizeBytes: sizeBytes,
+                lastOpenedAt: Date(),
+                lastOpenedDaysAgo: 0,
+                isRead: false,
+                isFavorite: false,
+                tags: []
+              )
+
+              Task { await viewModel.reload() }
+            }
           }
         }
-      }
-      .environment(viewModel)
+        .environment(viewModel)
     }
   }
 
@@ -367,7 +378,8 @@ private struct CurrentLibraryDashboardView: View {
       if let resume {
         ResumeReadingCardView(book: resume, onContinue: { viewModel.selectedBook = resume })
       } else {
-        EmptyInlineHint(text: L10n.tr("Start reading a book and it will show up here.", locale: locale))
+        EmptyInlineHint(
+          text: L10n.tr("Start reading a book and it will show up here.", locale: locale))
       }
 
       if !nextUp.isEmpty {
@@ -408,10 +420,12 @@ private struct ResumeReadingCardView: View {
           VStack(alignment: .leading, spacing: 6) {
             Text(book.title.uppercased())
               .font(.parkinsansMedium(size: 34))
-              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
+              .foregroundStyle(
+                colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack
+              )
               .lineLimit(3)
               .minimumScaleFactor(0.7)
-              .padding(.trailing, 44) // reserve space for options menu
+              .padding(.trailing, 44)  // reserve space for options menu
 
             Text(book.author.uppercased())
               .font(.parkinsans(size: 14, weight: .semibold))
@@ -421,15 +435,21 @@ private struct ResumeReadingCardView: View {
           }
 
           HStack {
-            Text(String(format: L10n.tr("PAGE %d OF %d", locale: locale), book.currentPage, book.pagesTotal))
-              .font(.parkinsansSemibold(size: 13))
-              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : AppColors.matteBlack.opacity(0.55))
+            Text(
+              String(
+                format: L10n.tr("PAGE %d OF %d", locale: locale), book.currentPage, book.pagesTotal)
+            )
+            .font(.parkinsansSemibold(size: 13))
+            .foregroundStyle(
+              colorScheme == .dark ? Color.white.opacity(0.60) : AppColors.matteBlack.opacity(0.55))
 
             Spacer()
 
             Text("\(Int((book.progress * 100).rounded()))%")
               .font(.parkinsansSemibold(size: 13))
-              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : AppColors.matteBlack.opacity(0.55))
+              .foregroundStyle(
+                colorScheme == .dark
+                  ? Color.white.opacity(0.60) : AppColors.matteBlack.opacity(0.55))
           }
 
           ProgressBarView(progress: book.progress)
@@ -439,18 +459,25 @@ private struct ResumeReadingCardView: View {
           HStack {
             Text(L10n.tr("CONTINUE", locale: locale))
               .font(.parkinsansSemibold(size: 14))
-              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.80) : AppColors.matteBlack)
+              .foregroundStyle(
+                colorScheme == .dark ? Color.white.opacity(0.80) : AppColors.matteBlack
+              )
               .underline()
 
             Spacer()
 
             Circle()
-              .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.22) : AppColors.matteBlack.opacity(0.35), lineWidth: 1.25)
+              .strokeBorder(
+                colorScheme == .dark
+                  ? Color.white.opacity(0.22) : AppColors.matteBlack.opacity(0.35), lineWidth: 1.25
+              )
               .frame(width: 34, height: 34)
               .overlay(
                 Image(systemName: "chevron.right")
                   .font(.system(size: 14, weight: .semibold))
-                  .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.82) : AppColors.matteBlack.opacity(0.82))
+                  .foregroundStyle(
+                    colorScheme == .dark
+                      ? Color.white.opacity(0.82) : AppColors.matteBlack.opacity(0.82))
               )
           }
           .padding(.top, 2)
@@ -463,7 +490,9 @@ private struct ResumeReadingCardView: View {
           .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color(.systemBackground))
           .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-              .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.35), lineWidth: 1)
+              .stroke(
+                colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.35),
+                lineWidth: 1)
           )
       )
     }
@@ -567,7 +596,8 @@ private struct NextUpTileView: View {
 
   private var progressRow: some View {
     HStack {
-      Text(String(format: L10n.tr("PAGE %d OF %d", locale: locale), book.currentPage, book.pagesTotal))
+      Text(
+        String(format: L10n.tr("PAGE %d OF %d", locale: locale), book.currentPage, book.pagesTotal))
       Spacer()
       Text("\(Int((book.progress * 100).rounded()))%")
     }
@@ -641,7 +671,9 @@ private struct RecentlyAddedRowView: View {
         VStack(alignment: .leading, spacing: 4) {
           Text(book.title.uppercased())
             .font(.parkinsansSemibold(size: 15))
-            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
+            .foregroundStyle(
+              colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack
+            )
             .lineLimit(2)
 
           Text(book.author)
@@ -660,12 +692,17 @@ private struct RecentlyAddedRowView: View {
         BookOptionsMenu(book: book)
 
         Circle()
-          .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.22) : AppColors.matteBlack.opacity(0.35), lineWidth: 1.25)
+          .strokeBorder(
+            colorScheme == .dark ? Color.white.opacity(0.22) : AppColors.matteBlack.opacity(0.35),
+            lineWidth: 1.25
+          )
           .frame(width: 34, height: 34)
           .overlay(
             Image(systemName: "arrow.right")
               .font(.system(size: 14, weight: .semibold))
-              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.82) : AppColors.matteBlack.opacity(0.82))
+              .foregroundStyle(
+                colorScheme == .dark
+                  ? Color.white.opacity(0.82) : AppColors.matteBlack.opacity(0.82))
           )
       }
       .padding(.vertical, 18)
@@ -673,7 +710,9 @@ private struct RecentlyAddedRowView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .overlay(alignment: .bottom) {
         Rectangle()
-          .fill(colorScheme == .dark ? Color.white.opacity(0.10) : AppColors.matteBlack.opacity(0.85))
+          .fill(
+            colorScheme == .dark ? Color.white.opacity(0.10) : AppColors.matteBlack.opacity(0.85)
+          )
           .frame(height: 1)
       }
     }
@@ -1117,140 +1156,140 @@ struct FilterTabsView: View {
 }
 
 #if DEBUG
-private enum LibraryPreviewData {
-  static var books: [Book] {
-    let now = Date()
-    return [
-      // To read
-      Book(
-        id: UUID(),
-        remoteID: UUID().uuidString,
-        title: "Atomic Habits",
-        author: "James Clear",
-        createdAt: Calendar.current.date(byAdding: .day, value: -14, to: now),
-        pagesTotal: 320,
-        currentPage: 1,
-        readingProgress: nil,
-        sizeBytes: 5_200_000,
-        lastOpenedAt: Calendar.current.date(byAdding: .day, value: -4, to: now),
-        lastOpenedDaysAgo: 4,
-        isRead: false,
-        isFavorite: false,
-        tags: ["Book"]
-      ),
-      Book(
-        id: UUID(),
-        remoteID: UUID().uuidString,
-        title: "The Pragmatic Programmer",
-        author: "Andy Hunt",
-        createdAt: Calendar.current.date(byAdding: .day, value: -2, to: now),
-        pagesTotal: 352,
-        currentPage: 1,
-        readingProgress: 0.0,
-        sizeBytes: 7_100_000,
-        lastOpenedAt: Calendar.current.date(byAdding: .day, value: -10, to: now),
-        lastOpenedDaysAgo: 10,
-        isRead: false,
-        isFavorite: true,
-        tags: ["Tech"]
-      ),
+  private enum LibraryPreviewData {
+    static var books: [Book] {
+      let now = Date()
+      return [
+        // To read
+        Book(
+          id: UUID(),
+          remoteID: UUID().uuidString,
+          title: "Atomic Habits",
+          author: "James Clear",
+          createdAt: Calendar.current.date(byAdding: .day, value: -14, to: now),
+          pagesTotal: 320,
+          currentPage: 1,
+          readingProgress: nil,
+          sizeBytes: 5_200_000,
+          lastOpenedAt: Calendar.current.date(byAdding: .day, value: -4, to: now),
+          lastOpenedDaysAgo: 4,
+          isRead: false,
+          isFavorite: false,
+          tags: ["Book"]
+        ),
+        Book(
+          id: UUID(),
+          remoteID: UUID().uuidString,
+          title: "The Pragmatic Programmer",
+          author: "Andy Hunt",
+          createdAt: Calendar.current.date(byAdding: .day, value: -2, to: now),
+          pagesTotal: 352,
+          currentPage: 1,
+          readingProgress: 0.0,
+          sizeBytes: 7_100_000,
+          lastOpenedAt: Calendar.current.date(byAdding: .day, value: -10, to: now),
+          lastOpenedDaysAgo: 10,
+          isRead: false,
+          isFavorite: true,
+          tags: ["Tech"]
+        ),
 
-      // Current (in progress)
-      Book(
-        id: UUID(),
-        remoteID: UUID().uuidString,
-        title: "Milk and Honey",
-        author: "Rupi Kaur",
-        createdAt: Calendar.current.date(byAdding: .day, value: -30, to: now),
-        pagesTotal: 204,
-        currentPage: 35,
-        readingProgress: 0.171,
-        sizeBytes: 3_900_000,
-        lastOpenedAt: Calendar.current.date(byAdding: .hour, value: -3, to: now),
-        lastOpenedDaysAgo: 0,
-        isRead: false,
-        isFavorite: true,
-        tags: ["Poetry"]
-      ),
-      Book(
-        id: UUID(),
-        remoteID: UUID().uuidString,
-        title: "Dune",
-        author: "Frank Herbert",
-        createdAt: Calendar.current.date(byAdding: .day, value: -6, to: now),
-        pagesTotal: 688,
-        currentPage: 120,
-        readingProgress: 0.174,
-        sizeBytes: 12_800_000,
-        lastOpenedAt: Calendar.current.date(byAdding: .hour, value: -26, to: now),
-        lastOpenedDaysAgo: 1,
-        isRead: false,
-        isFavorite: false,
-        tags: ["Sci‑Fi"]
-      ),
+        // Current (in progress)
+        Book(
+          id: UUID(),
+          remoteID: UUID().uuidString,
+          title: "Milk and Honey",
+          author: "Rupi Kaur",
+          createdAt: Calendar.current.date(byAdding: .day, value: -30, to: now),
+          pagesTotal: 204,
+          currentPage: 35,
+          readingProgress: 0.171,
+          sizeBytes: 3_900_000,
+          lastOpenedAt: Calendar.current.date(byAdding: .hour, value: -3, to: now),
+          lastOpenedDaysAgo: 0,
+          isRead: false,
+          isFavorite: true,
+          tags: ["Poetry"]
+        ),
+        Book(
+          id: UUID(),
+          remoteID: UUID().uuidString,
+          title: "Dune",
+          author: "Frank Herbert",
+          createdAt: Calendar.current.date(byAdding: .day, value: -6, to: now),
+          pagesTotal: 688,
+          currentPage: 120,
+          readingProgress: 0.174,
+          sizeBytes: 12_800_000,
+          lastOpenedAt: Calendar.current.date(byAdding: .hour, value: -26, to: now),
+          lastOpenedDaysAgo: 1,
+          isRead: false,
+          isFavorite: false,
+          tags: ["Sci‑Fi"]
+        ),
 
-      // Finished
-      Book(
-        id: UUID(),
-        remoteID: UUID().uuidString,
-        title: "1984",
-        author: "George Orwell",
-        createdAt: Calendar.current.date(byAdding: .day, value: -40, to: now),
-        pagesTotal: 328,
-        currentPage: 328,
-        readingProgress: 1.0,
-        sizeBytes: 4_600_000,
-        lastOpenedAt: Calendar.current.date(byAdding: .day, value: -2, to: now),
-        lastOpenedDaysAgo: 2,
-        isRead: true,
-        isFavorite: false,
-        tags: ["Classic"]
-      ),
-      Book(
-        id: UUID(),
-        remoteID: UUID().uuidString,
-        title: "Sapiens",
-        author: "Yuval Noah Harari",
-        createdAt: Calendar.current.date(byAdding: .day, value: -1, to: now),
-        pagesTotal: 498,
-        currentPage: 498,
-        readingProgress: 1.0,
-        sizeBytes: 9_400_000,
-        lastOpenedAt: Calendar.current.date(byAdding: .day, value: -18, to: now),
-        lastOpenedDaysAgo: 18,
-        isRead: true,
-        isFavorite: true,
-        tags: ["Essay"]
-      ),
-    ]
+        // Finished
+        Book(
+          id: UUID(),
+          remoteID: UUID().uuidString,
+          title: "1984",
+          author: "George Orwell",
+          createdAt: Calendar.current.date(byAdding: .day, value: -40, to: now),
+          pagesTotal: 328,
+          currentPage: 328,
+          readingProgress: 1.0,
+          sizeBytes: 4_600_000,
+          lastOpenedAt: Calendar.current.date(byAdding: .day, value: -2, to: now),
+          lastOpenedDaysAgo: 2,
+          isRead: true,
+          isFavorite: false,
+          tags: ["Classic"]
+        ),
+        Book(
+          id: UUID(),
+          remoteID: UUID().uuidString,
+          title: "Sapiens",
+          author: "Yuval Noah Harari",
+          createdAt: Calendar.current.date(byAdding: .day, value: -1, to: now),
+          pagesTotal: 498,
+          currentPage: 498,
+          readingProgress: 1.0,
+          sizeBytes: 9_400_000,
+          lastOpenedAt: Calendar.current.date(byAdding: .day, value: -18, to: now),
+          lastOpenedDaysAgo: 18,
+          isRead: true,
+          isFavorite: true,
+          tags: ["Essay"]
+        ),
+      ]
+    }
+
+    static func viewModel() -> HomeViewModel {
+      HomeViewModel.previewLibrary(books: books)
+    }
   }
 
-  static func viewModel() -> HomeViewModel {
-    HomeViewModel.previewLibrary(books: books)
+  #Preview("Library • All books") {
+    HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .allBooks)
+      .environmentObject(PreferencesViewModel())
+      .environmentObject(SubscriptionStore())
   }
-}
 
-#Preview("Library • All books") {
-  HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .allBooks)
-    .environmentObject(PreferencesViewModel())
-    .environmentObject(SubscriptionStore())
-}
+  #Preview("Library • Current") {
+    HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .current)
+      .environmentObject(PreferencesViewModel())
+      .environmentObject(SubscriptionStore())
+  }
 
-#Preview("Library • Current") {
-  HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .current)
-    .environmentObject(PreferencesViewModel())
-    .environmentObject(SubscriptionStore())
-}
+  #Preview("Library • To read") {
+    HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .toRead)
+      .environmentObject(PreferencesViewModel())
+      .environmentObject(SubscriptionStore())
+  }
 
-#Preview("Library • To read") {
-  HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .toRead)
-    .environmentObject(PreferencesViewModel())
-    .environmentObject(SubscriptionStore())
-}
-
-#Preview("Library • Finished") {
-  HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .finished)
-    .environmentObject(PreferencesViewModel())
-    .environmentObject(SubscriptionStore())
-}
+  #Preview("Library • Finished") {
+    HomeView(viewModel: LibraryPreviewData.viewModel(), initialSection: .finished)
+      .environmentObject(PreferencesViewModel())
+      .environmentObject(SubscriptionStore())
+  }
 #endif
