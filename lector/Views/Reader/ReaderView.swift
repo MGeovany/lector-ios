@@ -44,6 +44,8 @@ struct ReaderView: View {
   @State private var offlineMeta: RemoteOptimizedDocument? = nil
   @State private var offlineLastAutoDownloadAt: Date? = nil
   @State private var offlineMonitorTask: Task<Void, Never>? = nil
+  @State private var offlineDownloadTask: Task<Void, Never>? = nil
+  @State private var offlineDownloadGeneration: Int = 0
   // Used to force UI refresh when local offline files change.
   @State private var offlineAvailabilityToken: Int = 0
   @State private var offlineIsAvailableState: Bool = false
@@ -807,12 +809,15 @@ struct ReaderView: View {
     OfflinePinStore.setPinned(remoteID: id, pinned: true)
     offlineEnabled = true
     offlineLastAutoDownloadAt = nil
-    offlineIsAvailableState = OptimizedPagesStore.hasLocalCopy(remoteID: id)
+    let alreadyDownloaded = OptimizedPagesStore.hasLocalCopy(remoteID: id)
+    offlineIsAvailableState = alreadyDownloaded
 
-    if networkMonitor.isOnline, networkMonitor.isOnWiFi {
-      Task { @MainActor in
-        await downloadAndSaveOffline(remoteID: id)
-      }
+    // Only download when we don't already have a local copy.
+    if !alreadyDownloaded, networkMonitor.isOnline, networkMonitor.isOnWiFi {
+      startOfflineDownload(remoteID: id)
+    } else {
+      // Make sure we don't show a stale "Downloading…" toast when the file is already offline.
+      cancelOfflineDownload()
     }
 
     startOfflineMonitor(remoteID: id)
@@ -822,6 +827,7 @@ struct ReaderView: View {
     guard let id = book.remoteID, !id.isEmpty else { return }
     OfflinePinStore.setPinned(remoteID: id, pinned: false)
     offlineEnabled = false
+    cancelOfflineDownload()
     OptimizedPagesStore.delete(remoteID: id)
     offlineAvailabilityToken &+= 1
     offlineIsAvailableState = false
@@ -829,7 +835,29 @@ struct ReaderView: View {
     stopOfflineMonitor()
   }
 
-  @MainActor private func downloadAndSaveOffline(remoteID: String) async {
+  @MainActor private func startOfflineDownload(remoteID: String) {
+    cancelOfflineDownload()
+    offlineDownloadGeneration &+= 1
+    let gen = offlineDownloadGeneration
+    offlineDownloadTask = Task { @MainActor in
+      await downloadAndSaveOffline(remoteID: remoteID, generation: gen)
+    }
+  }
+
+  @MainActor private func cancelOfflineDownload() {
+    // Invalidate any in-flight async work *before* it can touch UI state.
+    offlineDownloadGeneration &+= 1
+    offlineDownloadTask?.cancel()
+    offlineDownloadTask = nil
+    // Ensure the UI doesn't keep showing the "Downloading…" toast after turning offline off.
+    isOfflineSaving = false
+    offlineSaveMessage = nil
+  }
+
+  @MainActor private func downloadAndSaveOffline(remoteID: String, generation: Int) async {
+    guard generation == offlineDownloadGeneration else { return }
+    guard !Task.isCancelled else { return }
+    guard OfflinePinStore.isPinned(remoteID: remoteID) else { return }
     guard !isOfflineSaving else { return }
     isOfflineSaving = true
     offlineSaveMessage = "Downloading…"
@@ -849,8 +877,13 @@ struct ReaderView: View {
       var waited: Int = 0
 
       while waited <= maxWaitSeconds {
+        guard generation == offlineDownloadGeneration else { return }
+        if Task.isCancelled { return }
+        guard OfflinePinStore.isPinned(remoteID: remoteID) else { return }
+
         print("[OfflineDownload] poll t=\(waited)s id=\(remoteID)")
         let opt = try await documentsService.getOptimizedDocument(id: remoteID)
+        guard generation == offlineDownloadGeneration else { return }
         offlineMeta = opt
 
         let total = opt.pages?.count ?? 0
@@ -929,9 +962,7 @@ struct ReaderView: View {
     }
     offlineLastAutoDownloadAt = now
 
-    Task { @MainActor in
-      await downloadAndSaveOffline(remoteID: remoteID)
-    }
+    startOfflineDownload(remoteID: remoteID)
   }
 
   @MainActor private func refreshOfflineSubtitle(remoteID: String) {
