@@ -51,7 +51,9 @@ final class AppSession {
     // the backend will return "Invalid token". Ask the user to sign in once to enable persistence.
     guard !refresh.isEmpty else {
       if let exp = SupabaseAuthService.accessTokenExpiration(token), exp <= Date() {
-        alertMessage = "Session expired. Please sign in again."
+        let msg = "Session expired. Please sign in again."
+        alertMessage = msg
+        PostHogAnalytics.captureError(message: msg, context: ["action": "session_refresh"])
         signOut()
       }
       return
@@ -75,8 +77,9 @@ final class AppSession {
       // Sync account status with backend after successful refresh.
       await syncAccountStatus()
     } catch {
-      // If refresh token is invalid/revoked, user must sign in again.
-      alertMessage = "Session expired. Please sign in again."
+      let msg = "Session expired. Please sign in again."
+      alertMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "session_refresh"])
       signOut()
     }
   }
@@ -145,8 +148,9 @@ final class AppSession {
 
     guard isValidForWebAuth else {
       print("🔴 [AppSession] Invalid OAuth URL: \(urlString)")
-      alertMessage =
-        "Couldn't start sign-in. Invalid authorization URL.\n\nURL: \(urlString)\n\nCheck SUPABASE_URL configuration."
+      let msg = "Couldn't start sign-in. Invalid authorization URL."
+      alertMessage = "\(msg)\n\nURL: \(urlString)\n\nCheck SUPABASE_URL configuration."
+      PostHogAnalytics.captureError(message: msg, context: ["action": "oauth_start"])
       isShowingOAuth = false
       oauthURL = nil
       return
@@ -173,8 +177,9 @@ final class AppSession {
         await MainActor.run {
           self.pkceVerifier = nil
           self.isAuthenticating = false
-          self.alertMessage =
-            (error as? LocalizedError)?.errorDescription ?? "Failed to sign in."
+          let errMsg = (error as? LocalizedError)?.errorDescription ?? "Failed to sign in."
+          self.alertMessage = errMsg
+          PostHogAnalytics.captureError(message: errMsg, context: ["action": "oauth_callback"])
         }
       }
     }
@@ -194,11 +199,14 @@ final class AppSession {
         }
         KeychainStore.setString(session.userID, account: KeychainKeys.userID)
         isAuthenticated = true
-
+        PostHogAnalytics.identify(userId: session.userID)
+        PostHogAnalytics.capture("signed_in", properties: ["method": "apple"])
         await refreshProfileIfNeeded()
         await syncAccountStatus()
       } catch {
-        alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to sign in."
+        let msg = (error as? LocalizedError)?.errorDescription ?? "Failed to sign in."
+        alertMessage = msg
+        PostHogAnalytics.captureError(message: msg, context: ["action": "sign_in_apple"])
       }
       isAuthenticating = false
     }
@@ -245,17 +253,17 @@ final class AppSession {
       }
       KeychainStore.setString(session.userID, account: KeychainKeys.userID)
       isAuthenticated = true
+      PostHogAnalytics.identify(userId: session.userID)
+      PostHogAnalytics.capture("signed_in", properties: ["method": "oauth"])
       print("🟠 [AppSession] Session saved to keychain, isAuthenticated = true")
       await refreshProfileIfNeeded()
-      // Sync account status with backend after successful login.
       await syncAccountStatus()
     } catch {
       print("🔴 [AppSession] Error completing OAuth: \(error)")
-      print(
-        "🔴 [AppSession] Error description: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
-      )
       pkceVerifier = nil
-      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to sign in."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Failed to sign in."
+      alertMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "oauth_callback"])
     }
   }
 

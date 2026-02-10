@@ -81,6 +81,26 @@ enum SupabaseConfig {
   static let redirectURL = URL(string: "\(redirectScheme)://auth-callback")!
 }
 
+/// PostHog analytics (project API key from PostHog project settings).
+/// Set via Info.plist: POSTHOG_API_KEY, POSTHOG_HOST (e.g. https://us.i.posthog.com or https://eu.i.posthog.com).
+enum PostHogAppConfig {
+  static var apiKey: String {
+    (Bundle.main.object(forInfoDictionaryKey: "POSTHOG_API_KEY") as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+  }
+
+  static var host: String {
+    let value =
+      (Bundle.main.object(forInfoDictionaryKey: "POSTHOG_HOST") as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return (value?.isEmpty == false) ? value! : "https://us.i.posthog.com"
+  }
+
+  static var isEnabled: Bool {
+    !apiKey.isEmpty && !apiKey.hasPrefix("$(")
+  }
+}
+
 enum WebAppLinks {
   /// Public website base URL (hosts privacy + terms pages).
   /// Configure via `WEB_APP_BASE_URL` in Info.plist.

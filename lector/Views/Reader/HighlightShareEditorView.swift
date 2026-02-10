@@ -244,12 +244,15 @@ struct HighlightShareEditorView: View {
         progress: progress
       )
 
+      PostHogAnalytics.capture("highlight_created", properties: ["document_id": documentID])
       toastMessage = "Highlight saved."
       withAnimation { showToast = true }
       try? await Task.sleep(nanoseconds: 1_250_000_000)
       withAnimation { showToast = false }
     } catch {
-      toastMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn’t save highlight."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Couldn’t save highlight."
+      toastMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "create_highlight"])
       withAnimation { showToast = true }
       try? await Task.sleep(nanoseconds: 1_800_000_000)
       withAnimation { showToast = false }
@@ -277,7 +280,9 @@ struct HighlightShareEditorView: View {
       // If the user picks "Save Image", iOS will save to Photos.
       await MainActor.run { showShareSheet = true }
     } catch {
-      toastMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn’t share image."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Couldn’t share image."
+      toastMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "share_highlight"])
       // Show error toast
       withAnimation {
         showToast = true
@@ -302,8 +307,12 @@ struct HighlightShareEditorView: View {
         pageNumber: pageNumber,
         progress: progress
       )
+      PostHogAnalytics.capture("highlight_created", properties: ["document_id": documentID])
     } catch {
-      // Non-fatal: sharing should still work even if persistence fails.
+      PostHogAnalytics.captureError(
+        message: (error as? LocalizedError)?.errorDescription ?? "Highlight persist failed.",
+        context: ["action": "persist_highlight_share"]
+      )
     }
   }
 }

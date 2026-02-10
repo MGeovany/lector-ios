@@ -7,6 +7,9 @@ lector.code-workspace
 .swiftpm/
 /Package.resolved
 
+# Secrets (copiar desde Secrets.xcconfig.example)
+Secrets.xcconfig
+
 # Xcode
 xcuserdata/
 *.xcuserstate

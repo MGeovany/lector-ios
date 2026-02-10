@@ -214,7 +214,9 @@ final class HomeViewModel {
       if !books.isEmpty, (error as? APIError) == .network {
         return
       }
-      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to load documents."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Failed to load documents."
+      alertMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "reload_documents"])
     }
   }
 
@@ -280,6 +282,7 @@ final class HomeViewModel {
     guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
     guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else {
       alertMessage = "Missing document id."
+      PostHogAnalytics.captureError(message: "Missing document id.", context: ["action": "set_tag"])
       return
     }
 
@@ -301,8 +304,11 @@ final class HomeViewModel {
       {
         await refreshTags()
       }
+      PostHogAnalytics.capture("tag_updated", properties: ["document_id": remoteID])
     } catch {
-      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to update tag."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Failed to update tag."
+      alertMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "set_tag"])
     }
   }
 
@@ -312,8 +318,11 @@ final class HomeViewModel {
     do {
       try await documentsService.createDocumentTag(name: trimmed)
       await refreshTags()
+      PostHogAnalytics.capture("tag_created", properties: ["tag": trimmed])
     } catch {
-      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to create tag."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Failed to create tag."
+      alertMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "create_tag"])
     }
   }
 
@@ -336,6 +345,7 @@ final class HomeViewModel {
         && !errorMessage.lowercased().contains("not found")
       {
         alertMessage = errorMessage
+        PostHogAnalytics.captureError(message: errorMessage, context: ["action": "delete_tag"])
       } else {
         // Tag doesn't exist, just remove it locally and refresh
         await refreshTags()
@@ -353,6 +363,7 @@ final class HomeViewModel {
     guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
     guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else {
       alertMessage = "Missing document id."
+      PostHogAnalytics.captureError(message: "Missing document id.", context: ["action": "update_book_details"])
       return
     }
 
@@ -376,8 +387,11 @@ final class HomeViewModel {
       if !trimmedTag.isEmpty {
         await refreshTags()
       }
+      PostHogAnalytics.capture("book_details_updated", properties: ["document_id": remoteID])
     } catch {
-      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to update details."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Failed to update details."
+      alertMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "update_book_details"])
     }
   }
 
@@ -416,6 +430,7 @@ final class HomeViewModel {
     guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
     guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else {
       alertMessage = "Missing document id."
+      PostHogAnalytics.captureError(message: "Missing document id.", context: ["action": "toggle_favorite"])
       return
     }
 
@@ -429,13 +444,15 @@ final class HomeViewModel {
         )
         // Keep other tabs / lists in sync.
         NotificationCenter.default.post(name: .documentsDidChange, object: nil)
+        PostHogAnalytics.capture("favorite_toggled", properties: ["document_id": remoteID, "is_favorite": books[idx].isFavorite])
       } catch {
         // Revert on failure.
         if let retryIdx = books.firstIndex(where: { $0.id == bookID }) {
           books[retryIdx].isFavorite = previous
         }
-        alertMessage =
-          (error as? LocalizedError)?.errorDescription ?? "Failed to update favorite."
+        let msg = (error as? LocalizedError)?.errorDescription ?? "Failed to update favorite."
+        alertMessage = msg
+        PostHogAnalytics.captureError(message: msg, context: ["action": "toggle_favorite"])
       }
     }
   }
@@ -486,18 +503,20 @@ final class HomeViewModel {
     guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
     guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else {
       alertMessage = "Missing document id."
+      PostHogAnalytics.captureError(message: "Missing document id.", context: ["action": "delete_book"])
       return
     }
 
     do {
       try await documentsService.deleteDocument(documentID: remoteID)
-      // Remove locally.
       books.remove(at: idx)
       if selectedBook?.id == bookID { selectedBook = nil }
-      // Notify other tabs/lists to refresh.
       NotificationCenter.default.post(name: .documentsDidChange, object: nil)
+      PostHogAnalytics.capture("document_deleted", properties: ["document_id": remoteID])
     } catch {
-      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to delete document."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Failed to delete document."
+      alertMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "delete_book"])
     }
   }
 

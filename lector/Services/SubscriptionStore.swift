@@ -134,8 +134,11 @@ final class SubscriptionStore: ObservableObject {
       try await storeKit.loadProducts()
       let ent = try await storeKit.purchase(plan: newPlan)
       apply(entitlement: ent)
+      PostHogAnalytics.capture("purchase_completed", properties: ["plan": "\(newPlan)"])
     } catch {
-      lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Purchase failed."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Purchase failed."
+      lastErrorMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "purchase"])
     }
   }
 
@@ -166,8 +169,11 @@ final class SubscriptionStore: ObservableObject {
     do {
       try await storeKit.restorePurchases()
       apply(entitlement: storeKit.entitlement)
+      PostHogAnalytics.capture("restore_purchases_completed")
     } catch {
-      lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Restore failed."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Restore failed."
+      lastErrorMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "restore_purchases"])
     }
   }
 
@@ -187,8 +193,9 @@ final class SubscriptionStore: ObservableObject {
     do {
       try await storeKit.showManageSubscriptions()
     } catch {
-      lastErrorMessage =
-        (error as? LocalizedError)?.errorDescription ?? "Couldn’t open subscriptions."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Couldn’t open subscriptions."
+      lastErrorMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "manage_subscriptions"])
     }
   }
 

@@ -104,6 +104,7 @@ struct WelcomeView: View {
       } onCompletion: { result in
         guard let rawNonce = appleNonce, !rawNonce.isEmpty else {
           session.alertMessage = "Couldn't start Apple sign-in. Missing nonce."
+          PostHogAnalytics.captureError(message: "Apple sign-in: Missing nonce.", context: ["action": "sign_in_apple"])
           return
         }
 
@@ -111,6 +112,7 @@ struct WelcomeView: View {
         case .success(let auth):
           guard let credential = auth.credential as? ASAuthorizationAppleIDCredential else {
             session.alertMessage = "Apple sign-in failed. Invalid credentials."
+            PostHogAnalytics.captureError(message: "Apple sign-in: Invalid credentials.", context: ["action": "sign_in_apple"])
             return
           }
           guard
@@ -119,13 +121,14 @@ struct WelcomeView: View {
             !idToken.isEmpty
           else {
             session.alertMessage = "Apple sign-in failed. Missing identity token."
+            PostHogAnalytics.captureError(message: "Apple sign-in: Missing identity token.", context: ["action": "sign_in_apple"])
             return
           }
           session.signInWithApple(idToken: idToken, nonce: rawNonce)
         case .failure(let error):
-          // User cancel is common; keep message short.
-          session.alertMessage =
-            (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+          let errMsg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+          session.alertMessage = errMsg
+          PostHogAnalytics.captureError(message: errMsg, context: ["action": "sign_in_apple"])
         }
       }
       .frame(height: 52)

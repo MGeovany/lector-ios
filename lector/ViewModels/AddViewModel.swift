@@ -66,8 +66,11 @@ final class AddViewModel {
           "sizeBytes": uploaded.originalSizeBytes ?? uploaded.metadata.fileSize ?? 0,
         ]
       )
+      PostHogAnalytics.capture("document_uploaded", properties: ["document_id": uploaded.id, "title": uploaded.title])
     } catch {
-      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to upload document."
+      let msg = (error as? LocalizedError)?.errorDescription ?? "Failed to upload document."
+      alertMessage = msg
+      PostHogAnalytics.captureError(message: msg, context: ["action": "upload_document"])
     }
   }
 
