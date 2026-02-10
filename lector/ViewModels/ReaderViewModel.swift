@@ -9,6 +9,13 @@ final class ReaderViewModel: ObservableObject {
   @Published var loadErrorMessage: String?
   private let emptyRemoteMessage = "No content to display."
 
+  private let debugLoggingEnabled: Bool = false
+
+  private func debugLog(_ message: @autoclosure () -> String) {
+    guard debugLoggingEnabled else { return }
+    print("[ReaderLoad] \(message())")
+  }
+
   func setPages(_ newPages: [String], initialPage: Int?) {
     pages = newPages.isEmpty ? [""] : newPages
 
@@ -41,11 +48,14 @@ final class ReaderViewModel: ObservableObject {
       setPages(BookTextProvider.pages(for: book), initialPage: book.currentPage)
       return
     }
+    
+    debugLog("start docID=\(id) title=\(book.title)")
 
     // Offline-first: prefer cached optimized pages.
     if let cached = OptimizedPagesStore.loadPages(remoteID: id, expectedChecksum: nil),
       !cached.isEmpty
     {
+      debugLog("cache_hit docID=\(id) pages=\(cached.count)")
       setPages(cached, initialPage: book.currentPage)
 
       // If the user pinned this doc for offline, refresh in background when possible.
@@ -70,6 +80,8 @@ final class ReaderViewModel: ObservableObject {
       }
       return
     }
+
+    debugLog("cache_miss docID=\(id) fetching_optimized=1")
 
     isLoading = true
     loadErrorMessage = nil
@@ -98,6 +110,9 @@ final class ReaderViewModel: ObservableObject {
       }
 
       if var opt = opt {
+        debugLog(
+          "optimized docID=\(id) status=\(opt.processingStatus) pages=\(opt.pages?.count ?? 0) optVer=\(opt.optimizedVersion) checksum=\(opt.optimizedChecksumSHA256 ?? "nil")"
+        )
         if let pages = opt.pages, !pages.isEmpty {
           setPages(pages, initialPage: book.currentPage)
           isLoading = false
@@ -115,6 +130,7 @@ final class ReaderViewModel: ObservableObject {
         }
 
         if opt.processingStatus == "failed" {
+          debugLog("optimized_failed docID=\(id)")
           loadErrorMessage = "Failed to process."
           isLoading = false
           watchdog.cancel()
@@ -123,6 +139,7 @@ final class ReaderViewModel: ObservableObject {
         }
 
         if opt.processingStatus != "ready" {
+          debugLog("optimized_processing docID=\(id) status=\(opt.processingStatus)")
           loadErrorMessage = "Preparing your document…"
           let maxWaitSeconds: Int = 12
           let intervalSeconds: Int = 2
@@ -137,6 +154,9 @@ final class ReaderViewModel: ObservableObject {
             if let next = try? await documentsService.getOptimizedDocument(id: id) {
               opt = next
             }
+            debugLog(
+              "optimized_poll docID=\(id) waited=\(waited)s status=\(opt.processingStatus) pages=\(opt.pages?.count ?? 0)"
+            )
             if let pages = opt.pages, !pages.isEmpty {
               setPages(pages, initialPage: book.currentPage)
               isLoading = false
@@ -147,6 +167,7 @@ final class ReaderViewModel: ObservableObject {
           }
 
           if opt.processingStatus == "failed" {
+            debugLog("optimized_failed_after_poll docID=\(id) waited=\(waited)s")
             loadErrorMessage = "Failed to process."
             isLoading = false
             watchdog.cancel()
@@ -155,31 +176,55 @@ final class ReaderViewModel: ObservableObject {
           }
 
           // Keep the loader up; backend continues processing.
+          debugLog(
+            "optimized_timeout_keep_loader docID=\(id) waited=\(waited)s lastStatus=\(opt.processingStatus)"
+          )
           loadErrorMessage = "Still preparing…"
           watchdog.cancel()
           return
         }
+        
+        debugLog("optimized_ready_but_empty_pages docID=\(id) fallback_to_document_detail=1")
       }
 
       // Fallback (older docs/backends): fetch full content and paginate.
       let doc = try await documentsService.getDocument(id: id)
+      if debugLoggingEnabled {
+        let blocks = doc.content
+        let types = Dictionary(grouping: blocks, by: { $0.type.lowercased() }).mapValues(\.count)
+        let nonEmpty =
+          blocks.filter { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+        debugLog(
+          "document_detail docID=\(id) format=\(doc.metadata.format ?? "nil") pageCount=\(doc.metadata.pageCount ?? -1) wordCount=\(doc.metadata.wordCount ?? -1) hasPassword=\(doc.metadata.hasPassword ?? false) blocks=\(blocks.count) nonEmptyBlocks=\(nonEmpty) types=\(types)"
+        )
+        for (i, b) in blocks.prefix(3).enumerated() {
+          let snippet = b.content
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix(80)
+          debugLog("block[\(i)] type=\(b.type) page=\(b.pageNumber) pos=\(b.position) len=\(b.content.count) snippet=\(snippet)")
+        }
+      }
       // Prefer backend page boundaries to match the web reader exactly.
       // If blocks don't have meaningful page numbers, fall back to local pagination.
       let pagesByBackend = Self.pagesPreservingBackendPages(doc.content)
+      debugLog("pagesByBackend docID=\(id) pages=\(pagesByBackend.count) firstLen=\(pagesByBackend.first?.count ?? 0)")
       if pagesByBackend.count > 1
         || (pagesByBackend.first?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
       {
         setPages(pagesByBackend, initialPage: book.currentPage)
         isLoading = false
         watchdog.cancel()
+        debugLog("done_using_backend_pages docID=\(id)")
         return
       }
 
       let text = Self.flattenContent(doc.content)
+      debugLog("flattened docID=\(id) textLen=\(text.count)")
 
       // If the backend returns an empty/omitted content array (or it flattens to empty),
       // don't paginate an empty string; show an explicit placeholder instead.
       if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        debugLog("empty_after_flatten docID=\(id) -> showing_placeholder (likely scanned/image-only pdf or processing returned no text)")
         loadErrorMessage = nil
         setPages([emptyRemoteMessage], initialPage: 1)
         isLoading = false
@@ -188,10 +233,12 @@ final class ReaderViewModel: ObservableObject {
       }
 
       let paged = TextPaginator.paginate(text: text, containerSize: containerSize, style: style)
+      debugLog("paginated docID=\(id) pages=\(paged.count)")
       setPages(paged, initialPage: book.currentPage)
       isLoading = false
       watchdog.cancel()
     } catch {
+      debugLog("error docID=\(id) error=\(error)")
       if let cached = OptimizedPagesStore.loadPages(remoteID: id, expectedChecksum: nil),
         !cached.isEmpty
       {

@@ -90,7 +90,14 @@ enum OptimizedPagesStore {
   }
 
   static func hasLocalCopy(remoteID: String) -> Bool {
-    loadManifest(remoteID: remoteID) != nil
+    do {
+      let dir = try docDir(remoteID: remoteID)
+      let manifestURL = dir.appendingPathComponent("manifest.json")
+      let pagesURL = dir.appendingPathComponent("pages.json")
+      return fm.fileExists(atPath: manifestURL.path) && fm.fileExists(atPath: pagesURL.path)
+    } catch {
+      return false
+    }
   }
 
   static func savePages(
@@ -116,8 +123,10 @@ enum OptimizedPagesStore {
 
     let manifestURL = dir.appendingPathComponent("manifest.json")
     let pagesURL = dir.appendingPathComponent("pages.json")
-    try enc.encode(manifest).write(to: manifestURL, options: [.atomic])
+    // Write pages first, then manifest. This avoids leaving a "manifest-only" local copy
+    // if the pages write fails (which would break offline detection).
     try enc.encode(pages).write(to: pagesURL, options: [.atomic])
+    try enc.encode(manifest).write(to: manifestURL, options: [.atomic])
   }
 
   static func delete(remoteID: String) {

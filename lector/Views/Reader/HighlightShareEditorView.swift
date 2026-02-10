@@ -1,4 +1,3 @@
-import Photos
 import SwiftUI
 
 enum HighlightShareFormat: String, CaseIterable, Identifiable {
@@ -48,9 +47,35 @@ struct HighlightShareEditorView: View {
   @State private var isSaving: Bool = false
   @State private var isPersistingOnly: Bool = false
   @State private var showToast: Bool = false
-  @State private var toastMessage: String = "Image saved to Photos app"
+  @State private var toastMessage: String = "Couldn’t share image."
   @State private var shareImage: UIImage?
   @State private var showShareSheet: Bool = false
+
+  /// Renders a share-ready image (Instagram-friendly) for a highlight.
+  @MainActor
+  static func renderShareImage(
+    quote: String,
+    bookTitle: String,
+    author: String,
+    font: ReadingFont,
+    fontSize: Double,
+    lineSpacing: Double,
+    theme: ReadingTheme
+  ) async throws -> UIImage {
+    let draft = HighlightShareDraft(
+      quote: quote,
+      bookTitle: bookTitle,
+      author: author,
+      format: .wide
+    )
+    return try await HighlightShareRenderer.render(
+      draft: draft,
+      font: font,
+      fontSize: fontSize,
+      lineSpacing: lineSpacing,
+      theme: theme
+    )
+  }
 
   init(
     quote: String,
@@ -103,7 +128,7 @@ struct HighlightShareEditorView: View {
           }
 
         // Centered content
-        VStack(spacing: 22) {
+        VStack(spacing: 16) {
           previewCard
           buttons
         }
@@ -162,7 +187,7 @@ struct HighlightShareEditorView: View {
   }
 
   private var buttons: some View {
-    VStack(spacing: 10) {
+    VStack(spacing: 8) {
       Button {
         Task { await persistOnly() }
       } label: {
@@ -176,7 +201,7 @@ struct HighlightShareEditorView: View {
           }
         }
       }
-      .buttonStyle(LectorPrimaryCapsuleButtonStyle())
+      .buttonStyle(LectorCompactCapsuleButtonStyle())
       .disabled(isSaving || isPersistingOnly)
       .opacity((isSaving || isPersistingOnly) ? 0.7 : 1.0)
 
@@ -196,7 +221,7 @@ struct HighlightShareEditorView: View {
           }
         }
       }
-      .buttonStyle(LectorPrimaryCapsuleButtonStyle())
+      .buttonStyle(LectorCompactCapsuleButtonStyle())
       .disabled(isSaving || isPersistingOnly)
       .opacity((isSaving || isPersistingOnly) ? 0.7 : 1.0)
     }
@@ -248,28 +273,9 @@ struct HighlightShareEditorView: View {
       )
       // Keep a reference for the share sheet.
       shareImage = img
-
-      // Start saving (we'll present share sheet immediately, but keep the button disabled
-      // until the save finishes to avoid duplicates).
-      let saveTask = Task {
-        try await PhotoLibrarySaver.save(image: img)
-      }
-
-      // Present the native iOS share sheet immediately (don't block on Photos permissions).
-      await MainActor.run {
-        showShareSheet = true
-      }
-
-      do {
-        try await saveTask.value
-        toastMessage = "Image saved to Photos app"
-      } catch {
-        toastMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn’t save to Photos."
-      }
-
-      withAnimation { showToast = true }
-      try? await Task.sleep(nanoseconds: 1_500_000_000)
-      withAnimation { showToast = false }
+      // Present the native iOS share sheet with all actions (Instagram, Save Image, etc).
+      // If the user picks "Save Image", iOS will save to Photos.
+      await MainActor.run { showShareSheet = true }
     } catch {
       toastMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn’t share image."
       // Show error toast
@@ -298,9 +304,6 @@ struct HighlightShareEditorView: View {
       )
     } catch {
       // Non-fatal: sharing should still work even if persistence fails.
-      #if DEBUG
-        print("[HighlightShareEditorView] Failed to persist highlight: \(error)")
-      #endif
     }
   }
 }
@@ -309,10 +312,7 @@ private struct ShareSheet: UIViewControllerRepresentable {
   let activityItems: [Any]
 
   func makeUIViewController(context: Context) -> UIActivityViewController {
-    let vc = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    // We already auto-save to Photos; exclude the "Save Image" action to prevent duplicates.
-    vc.excludedActivityTypes = [.saveToCameraRoll]
-    return vc
+    UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
   }
 
   func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
@@ -527,10 +527,10 @@ private struct HighlightCardView: View {
 
     VStack(alignment: .leading, spacing: 12) {
       Text("Lector")
-        .font(.custom("CinzelDecorative-Bold", size: 16))
+        .font(.custom("CinzelDecorative-Bold", size: 22))
         .foregroundStyle(primary)
         .lineLimit(1)
-        .padding(.bottom, 14)
+        .padding(.bottom, 16)
         .padding(.leading, 20)
 
       HStack(alignment: .top, spacing: 16) {
@@ -599,43 +599,6 @@ private struct HighlightCardView: View {
     )
     // Prevent the card from stretching vertically; keep it content-sized.
     .fixedSize(horizontal: false, vertical: true)
-  }
-}
-
-private enum PhotoLibrarySaverError: LocalizedError {
-  case notAuthorized
-
-  var errorDescription: String? {
-    switch self {
-    case .notAuthorized: return "Photos permission is required to save images."
-    }
-  }
-}
-
-private enum PhotoLibrarySaver {
-  static func save(image: UIImage) async throws {
-    let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-    guard status == .authorized || status == .limited else {
-      throw PhotoLibrarySaverError.notAuthorized
-    }
-
-    try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-      PHPhotoLibrary.shared().performChanges(
-        {
-          PHAssetChangeRequest.creationRequestForAsset(from: image)
-        },
-        completionHandler: { success, error in
-          if let error = error {
-            cont.resume(throwing: error)
-            return
-          }
-          if success {
-            cont.resume(returning: ())
-          } else {
-            cont.resume(throwing: PhotoLibrarySaverError.notAuthorized)
-          }
-        })
-    }
   }
 }
 

@@ -168,10 +168,15 @@ struct ReaderSettingsMainSettingsView: View {
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
       action: {
-        searchVisible = true
-        if searchQuery.isEmpty { searchQuery = "" }
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
           isPresented = false
+        }
+        // Wait a beat for the panel dismissal/layout to settle, then open search.
+        // This ensures the reader scroll-to-top actually occurs even when the user is
+        // at the very bottom of the document.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
+          searchVisible = true
+          if searchQuery.isEmpty { searchQuery = "" }
         }
       }
     )
@@ -231,9 +236,6 @@ struct ReaderSettingsMainSettingsView: View {
           onEnableOffline()
         } else {
           onDisableOffline()
-          withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            isPresented = false
-          }
         }
       }
     )

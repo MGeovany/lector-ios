@@ -117,7 +117,7 @@ struct PremiumUpsellSheetView: View {
           "\(MAX_STORAGE_PRO_GB)GB total storage",
           "Sync + backup",
           "Private stats (soon)",
-          "Ask AI (\(MAX_AI_TOKENS_TRIAL_PER_MONTH) tokens during trial, \(MAX_AI_TOKENS_PREMIUM_PER_MONTH) after)",
+          "Ask AI",
         ],
         badgeText: billingCycle == .yearly ? "Popular" : nil,
         isSelected: selectedPlan.isPro,
@@ -132,7 +132,7 @@ struct PremiumUpsellSheetView: View {
         subtitle: "A one‑time purchase to support Lector early.",
         bullets: [
           "Everything in Pro",
-          "Ask AI (\(MAX_AI_TOKENS_PREMIUM_PER_MONTH) tokens/month)",
+          "Ask AI",
           "Early access",
           "“Lector Founder” badge",
         ],
@@ -217,35 +217,6 @@ struct PremiumUpsellSheetView: View {
       } message: {
         Text(restoreMessage ?? subscription.lastErrorMessage ?? "Done.")
       }
-
-      /*  #if DEBUG
-        if debugCanResetFounderPurchase {
-          Button {
-            Task {
-              let newValue = !subscription.debugIsIgnoringFounderPurchase
-              await subscription.debugSetIgnoreFounderPurchase(newValue)
-              if subscription.lastErrorMessage == nil {
-                restoreMessage =
-                  newValue
-                  ? "Founder purchase ignored (debug)."
-                  : "Founder purchase re-enabled (debug)."
-                showRestoreAlert = true
-              }
-            }
-          } label: {
-            Text(
-              subscription.debugIsIgnoringFounderPurchase
-                ? "Re-enable Founder purchase (Debug)"
-                : "Ignore Founder purchase (Debug)"
-            )
-            .font(.parkinsans(size: 13, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .padding(.top, 10)
-          }
-          .buttonStyle(.plain)
-        }
-      #endif
-      */
       HStack(spacing: 14) {
         Link("Privacy Policy", destination: WebAppLinks.privacyPolicy)
         Link("Terms of Use (EULA)", destination: WebAppLinks.appleStandardEULA)
@@ -295,17 +266,6 @@ struct PremiumUpsellSheetView: View {
     f.timeStyle = .none
     return f.string(from: date)
   }
-
-  #if DEBUG
-    private var debugCanResetFounderPurchase: Bool {
-      let isSandboxReceipt = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-      #if targetEnvironment(simulator)
-        return true
-      #else
-        return isSandboxReceipt
-      #endif
-    }
-  #endif
 }
 
 private struct PlanCard: View {

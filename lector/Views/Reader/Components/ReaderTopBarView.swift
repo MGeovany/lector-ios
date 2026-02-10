@@ -8,6 +8,8 @@ struct ReaderTopBarView: View {
   let onShowHighlights: () -> Void
   let onBack: () -> Void
 
+  private let iconButtonSize: CGFloat = 34
+
   private var isDarkTheme: Bool {
     preferences.theme == .night || preferences.theme == .amber
   }
@@ -16,8 +18,23 @@ struct ReaderTopBarView: View {
     isDarkTheme ? 0.96 : 0.88
   }
 
+  @ViewBuilder
+  private func headerIconButton(
+    accessibilityLabel: String,
+    action: @escaping () -> Void,
+    @ViewBuilder label: () -> some View
+  ) -> some View {
+    Button(action: action) {
+      label()
+        .frame(width: iconButtonSize, height: iconButtonSize)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(accessibilityLabel)
+  }
+
   var body: some View {
-    HStack(spacing: 10) {
+    HStack(spacing: 8) {
       Button(action: onBack) {
         Image(systemName: "chevron.left")
           .font(.system(size: 15, weight: .semibold))
@@ -29,32 +46,27 @@ struct ReaderTopBarView: View {
 
       Spacer(minLength: 0)
 
-      HStack {
-        Button {
+      HStack(spacing: 6) {
+        headerIconButton(accessibilityLabel: "Reader settings", action: {
           withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             showReaderSettings.toggle()
           }
-        } label: {
+        }) {
           Image("TabSettings")
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
-            .frame(width: 20, height: 20)
+            .frame(width: 19, height: 19)
             .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Reader settings")
 
-        Button(action: onShowHighlights) {
+        headerIconButton(accessibilityLabel: "Highlights", action: onShowHighlights) {
           Image(systemName: "bookmark")
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
-            .padding(8)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Highlights")
 
-        Button {
+        headerIconButton(accessibilityLabel: "Cycle theme", action: {
           withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
             switch preferences.theme {
             case .day:
@@ -65,15 +77,12 @@ struct ReaderTopBarView: View {
               preferences.theme = .day
             }
           }
-        } label: {
+        }) {
           Image(systemName: preferences.theme.icon)
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
-            .padding(8)
             .symbolEffect(.bounce, value: preferences.theme)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Cycle theme")
       }
     }
     .padding(.horizontal, horizontalPadding)

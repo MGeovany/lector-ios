@@ -15,11 +15,7 @@ struct SelectableTextView: UIViewRepresentable {
   let clearSelectionToken: Int
   let onShareSelection: (String) -> Void
 
-  #if DEBUG
-  private static let debugScrollLogs: Bool = true
-  #else
   private static let debugScrollLogs: Bool = false
-  #endif
 
   func sizeThatFits(
     _ proposal: ProposedViewSize,

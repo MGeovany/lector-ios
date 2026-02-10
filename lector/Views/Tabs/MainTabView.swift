@@ -11,6 +11,7 @@ struct MainTabView: View {
   @State private var selectedTab: Tab = .home
   @State private var isTabBarHidden: Bool = false
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.locale) private var locale
   @Environment(AppSession.self) private var session
   // Observe avatar selection changes so the tab bar icon updates immediately.
   @AppStorage(AppPreferenceKeys.profileAvatarHeadAssetName) private var headAssetName: String = ""
@@ -53,28 +54,28 @@ struct MainTabView: View {
   private var tabBar: some View {
     HStack(spacing: 0) {
       TabBarItemButton(
-        title: "Home",
+        title: L10n.tr("Home", locale: locale),
         icon: selectedTab == .home ? .asset("TabHomeActive") : .asset("TabHome"),
         isSelected: selectedTab == .home,
         action: { selectedTab = .home }
       )
 
       TabBarItemButton(
-        title: "Favorites",
+        title: L10n.tr("Favorites", locale: locale),
         icon: selectedTab == .favorites ? .asset("TabFavoriteActive") : .asset("TabFavorite"),
         isSelected: selectedTab == .favorites,
         action: { selectedTab = .favorites }
       )
 
       TabBarItemButton(
-        title: "Preferences",
+        title: L10n.tr("Settings", locale: locale),
         icon: selectedTab == .preferences ? .asset("TabSettingsActive") : .asset("TabSettings"),
         isSelected: selectedTab == .preferences,
         action: { selectedTab = .preferences }
       )
 
       TabBarItemButton(
-        title: "Profile",
+        title: L10n.tr("Profile", locale: locale),
         icon: .profileAvatar(
           url: session.profile?.avatarURL,
           selection: currentAvatarSelection

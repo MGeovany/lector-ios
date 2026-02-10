@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeHeaderView: View {
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.locale) private var locale
   @Binding var searchText: String
   var onAddTapped: (() -> Void)? = nil
 
@@ -44,7 +45,7 @@ struct HomeHeaderView: View {
 
       VStack(alignment: .center, spacing: 16) {
         HStack(alignment: .center, spacing: 0) {
-          Text("Library")
+          Text(L10n.tr("Library", locale: locale))
             .font(.parkinsansMedium(size: 83))
             .foregroundStyle(
               colorScheme == .dark ? Color.white.opacity(0.75) : AppColors.matteBlack)
@@ -76,7 +77,7 @@ struct HomeHeaderView: View {
             .font(.parkinsansMedium(size: 16))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
-          TextField("Search", text: $searchText)
+          TextField(L10n.tr("Search", locale: locale), text: $searchText)
             .font(.parkinsansMedium(size: 16))
             .foregroundStyle(
               colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack
@@ -94,7 +95,7 @@ struct HomeHeaderView: View {
                 .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.35) : .secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Clear search")
+            .accessibilityLabel(L10n.tr("Clear search", locale: locale))
           }
         }
         .padding(.horizontal, 22)

@@ -1,9 +1,5 @@
 import Foundation
 
-#if canImport(Sentry)
-  import Sentry
-#endif
-
 protocol AuthTokenProviding {
   func bearerToken() -> String?
 }
@@ -227,15 +223,6 @@ final class APIClient {
 
   private func makeRequest(url: URL, method: String) throws -> URLRequest {
     guard let token = tokenProvider.bearerToken(), !token.isEmpty else {
-      #if canImport(Sentry)
-        let crumb = Breadcrumb(level: .warning, category: "api")
-        crumb.message = "missing_auth_token"
-        crumb.data = [
-          "method": method,
-          "url": url.absoluteString,
-        ]
-        SentrySDK.addBreadcrumb(crumb)
-      #endif
       throw APIError.missingAuthToken
     }
 
@@ -269,41 +256,13 @@ final class APIClient {
     didRetryAfterRefresh: Bool
   ) async throws -> T {
     do {
-      #if DEBUG
-        let shouldLog = request.url?.path.contains("/documents/") == true
-          && request.url?.path.contains("/optimized") == true
-        let startedAt = Date()
-        if shouldLog {
-          print("[API] -> \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "")")
-        }
-      #endif
-
       let (data, response) = try await session.data(for: request)
       guard let http = response as? HTTPURLResponse else {
         throw APIError.invalidResponse
       }
-
-      #if DEBUG
-        if shouldLog {
-          let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
-          print("[API] <- \(http.statusCode) (\(ms)ms) \(data.count) bytes")
-        }
-      #endif
       let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
 
       if !(200...299).contains(http.statusCode) {
-        #if canImport(Sentry)
-          let crumb = Breadcrumb(level: http.statusCode >= 500 ? .error : .warning, category: "api")
-          crumb.message = "http_error"
-          crumb.data = [
-            "status": http.statusCode,
-            "method": request.httpMethod ?? "",
-            "url": request.url?.absoluteString ?? "",
-            "did_retry_after_refresh": didRetryAfterRefresh,
-          ]
-          SentrySDK.addBreadcrumb(crumb)
-        #endif
-
         // Attempt a single refresh+retry on auth failures.
         if http.statusCode == 401, !didRetryAfterRefresh {
           if let refreshed = try? await refreshAccessTokenIfPossible() {
@@ -323,26 +282,6 @@ final class APIClient {
         }
 
         let err = APIError.server(statusCode: http.statusCode, message: message)
-        if http.statusCode >= 500 {
-          #if canImport(Sentry)
-            let event = Event(error: err)
-            event.level = .error
-            event.extra = [
-              "status": String(http.statusCode),
-              "method": request.httpMethod ?? "",
-              "url": request.url?.absoluteString ?? "",
-              "did_retry_after_refresh": String(didRetryAfterRefresh),
-            ]
-            // Group by endpoint+status (helps spot repetition) without exploding cardinality.
-            event.fingerprint = [
-              "api_server_error",
-              String(http.statusCode),
-              request.httpMethod ?? "",
-              request.url?.path ?? "",
-            ]
-            SentrySDK.capture(event: event)
-          #endif
-        }
         throw err
       }
 
@@ -364,64 +303,11 @@ final class APIClient {
 
         return try APIClient.jsonDecoder.decode(T.self, from: data)
       } catch {
-        #if DEBUG
-          let urlString = request.url?.absoluteString ?? ""
-          let method = request.httpMethod ?? ""
-          let previewData = data.prefix(2_048)
-          let preview =
-            String(data: previewData, encoding: .utf8)
-            ?? "<non-utf8 body, \(data.count) bytes>"
-          print(
-            """
-            [APIClient] Decode failed
-              - request: \(method) \(urlString)
-              - status: \(http.statusCode)
-              - content-type: \(contentType)
-              - body-preview(\(previewData.count)/\(data.count) bytes): \(preview)
-            """
-          )
-        #endif
-        #if canImport(Sentry)
-          let event = Event(error: APIError.decoding)
-          event.level = .error
-          event.extra = [
-            "method": request.httpMethod ?? "",
-            "url": request.url?.absoluteString ?? "",
-            "status": String(http.statusCode),
-            "content_type": contentType,
-            "body_preview": String(data: data.prefix(2_048), encoding: .utf8) ?? "",
-          ]
-          event.fingerprint = [
-            "api_decoding_failed", request.httpMethod ?? "", request.url?.path ?? "",
-          ]
-          SentrySDK.capture(event: event)
-        #endif
         throw APIError.decoding
       }
     } catch let apiError as APIError {
       throw apiError
     } catch {
-      #if DEBUG
-        let shouldLog = request.url?.path.contains("/documents/") == true
-          && request.url?.path.contains("/optimized") == true
-        if shouldLog {
-          print(
-            "[API] !! \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "") error=\(error)"
-          )
-        }
-      #endif
-      #if canImport(Sentry)
-        let event = Event(error: error)
-        event.level = .error
-        event.extra = [
-          "method": request.httpMethod ?? "",
-          "url": request.url?.absoluteString ?? "",
-        ]
-        event.fingerprint = [
-          "api_network_error", request.httpMethod ?? "", request.url?.path ?? "",
-        ]
-        SentrySDK.capture(event: event)
-      #endif
       throw APIError.network
     }
   }

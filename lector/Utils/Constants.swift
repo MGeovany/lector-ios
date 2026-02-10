@@ -23,23 +23,37 @@ public let MAX_AI_TOKENS_PREMIUM_PER_MONTH: Int = 500_000
 // Note: backend enforcement must also match this value.
 public let MAX_AI_TOKENS_TRIAL_PER_MONTH: Int = 50_000
 
+enum ReaderLimits {
+  /// Continuous/infinite scroll will only apply to documents shorter than this page count.
+  /// Kept as a shared constant so Preferences UI matches Reader behavior.
+  static let continuousScrollMaxPages: Int = 10
+}
+
 enum APIConfig {
-  /// Prefer Info.plist configuration (set via Xcode build settings). Falls back to hardcoded defaults.
+  /// Use Info.plist API_BASE_URL when set. Otherwise: local/TestFlight → dev backend; App Store / main → production.
   static var baseURL: URL {
     let value =
       (Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String)?.trimmingCharacters(
         in: .whitespacesAndNewlines)
-    #if DEBUG
-      #if targetEnvironment(simulator)
-        let fallback = "http://localhost:8080/api/v1"
-      #else
-        // On device, localhost points to the phone. Use API_BASE_URL to target your Mac.
-        let fallback = "https://reader-go-383281059490.us-central1.run.app/api/v1"
-      #endif
-    #else
-      let fallback = "https://reader-go-383281059490.us-central1.run.app/api/v1"
-    #endif
+    let fallback = useDevBackendByDefault
+      ? "https://reader-go-dev-383281059490.us-central1.run.app/api/v1"
+      : "https://reader-go-383281059490.us-central1.run.app/api/v1"
     return normalizeHTTPURL(value?.isEmpty == false ? value! : fallback, fallback: fallback)
+  }
+
+  /// True when the app should use the dev backend: local (DEBUG) or TestFlight (sandbox receipt).
+  private static var useDevBackendByDefault: Bool {
+    #if DEBUG
+    return true
+    #else
+    return hasSandboxReceipt
+    #endif
+  }
+
+  /// TestFlight (and dev installs) use a sandbox receipt; App Store uses production receipt.
+  private static var hasSandboxReceipt: Bool {
+    guard let url = Bundle.main.appStoreReceiptURL else { return false }
+    return url.lastPathComponent == "sandboxReceipt" || url.path.contains("sandboxReceipt")
   }
 
   /// Prefer Info.plist configuration (set via Xcode build settings). Falls back to a known test user.

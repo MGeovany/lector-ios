@@ -120,15 +120,15 @@ private struct GoPremiumRingButton: View {
 
   var body: some View {
     Button(action: action) {
-      HStack(spacing: 6) {
+      HStack(spacing: 4) {
         Image(systemName: "crown.fill")
-          .font(.parkinsans(size: CGFloat(11), weight: .heavy))
+          .font(.parkinsans(size: CGFloat(10), weight: .heavy))
         Text("Go Premium")
-          .font(.parkinsans(size: CGFloat(11), weight: .heavy))
+          .font(.parkinsans(size: CGFloat(10), weight: .heavy))
       }
       .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
-      .padding(.horizontal, 12)
-      .padding(.vertical, 8)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 5)
       // Match the app theme: dark pill on dark mode, white on light.
       .background(
         (colorScheme == .dark ? Color.black : Color.white),
@@ -137,14 +137,14 @@ private struct GoPremiumRingButton: View {
     }
     // Avoid the default pressed/disabled-looking highlight.
     .buttonStyle(GoPremiumRingButtonStyle())
-    .padding(2)
+    .padding(0.8)
     .background(
       AngularGradient(gradient: ringGradient, center: .center, angle: .degrees(ringRotation)),
       in: Capsule(style: .continuous)
     )
     .onAppear {
       ringRotation = 0
-      withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
+      withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
         ringRotation = 360
       }
     }
@@ -154,8 +154,8 @@ private struct GoPremiumRingButton: View {
 private struct GoPremiumRingButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-      .animation(.spring(response: 0.22, dampingFraction: 0.85), value: configuration.isPressed)
+      .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+      .animation(.spring(response: 0.15, dampingFraction: 0.9), value: configuration.isPressed)
   }
 }
 

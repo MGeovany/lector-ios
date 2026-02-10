@@ -26,319 +26,318 @@ struct ProfileView: View {
   private let documentsService: DocumentsServicing = GoDocumentsService()
   private let api: APIClient = APIClient()
 
-  @AppStorage(AppPreferenceKeys.language) private var languageRawValue: String = AppLanguage.english
-    .rawValue
+  // @AppStorage(AppPreferenceKeys.language) private var languageRawValue: String = AppLanguage.english.rawValue // Used by Language row (commented out)
   @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
   @AppStorage(AppPreferenceKeys.accountDisabled) private var accountDisabled: Bool = false
 
   private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
   var body: some View {
-
     NavigationStack {
-      List {
-        Section {
-          if session.isAuthenticated {
-            if let profile = session.profile {
-              ProfileHeaderRowView(
-                name: profile.displayName,
-                email: profile.email,
-                avatarURL: profile.avatarURL,
-                badge: profileBadge
-              )
-            } else {
-              ProfileHeaderRowView(
-                name: "Loading…",
-                email: "Retrieving your profile",
-                badge: profileBadge
-              )
-            }
-          } else {
-            ProfileHeaderRowView(
-              name: "Marlon Castro",
-              email: "marlon.castro@thefndrs.com",
-              badge: profileBadge
-            )
-          }
-
-          Button {
-            showEditProfilePicture = true
-          } label: {
-            // flex space between.
-            HStack(alignment: .center, spacing: 10) {
-              Text("Edit profile picture")
-                .font(.parkinsans(size: 15, weight: .medium))
-                // matte si es tema white letras negras, si es tema negro letras blancas
-                .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
-
-              Spacer(minLength: 0)
-
-              Image(systemName: "shuffle")
-                .font(.parkinsans(size: 15, weight: .medium))
-                .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
-            }
-            .frame(maxWidth: .infinity)
-          }
+      profileListContent
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(8)
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+          Color.clear.frame(height: 62)
         }
-
-        Section("Subscription") {
-          HStack {
-            Text("Plan")
-            Spacer()
-            Text(planTitle)
-              .foregroundStyle(.secondary)
-          }
-
-          if let statusText = planStatusText {
-            HStack {
-              Text("Status")
-              Spacer()
-              Text(statusText)
-                .foregroundStyle(.secondary)
+        .sheet(
+          isPresented: Binding(
+            get: { showPremiumSheet && !isPad },
+            set: { newValue in
+              if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
             }
-          }
-
-          if let next = nextPlanText {
-            HStack {
-              Text("Next")
-              Spacer()
-              Text(next)
-                .foregroundStyle(.secondary)
-            }
-          }
-
-          Button {
-            showPremiumSheet = true
-          } label: {
-            HStack {
-              Text(subscription.isPremium ? "Change subscription" : "Upgrade")
-                .font(.parkinsans(size: 15, weight: .medium))
-                .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
-              Spacer()
-              Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
-            }
-          }
-        }
-
-        if subscription.isFounder {
-          Section("Founder") {
-            FounderHighlightCard(displayName: founderDisplayName)
-              .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-              .listRowBackground(Color.clear)
-          }
-        }
-
-        Section("Storage") {
-          StorageUsageCardView(
-            usedBytes: usedBytes,
-            maxBytes: maxBytesOverride ?? subscription.maxStorageBytes,
-            isPremium: subscription.isPremium,
-            onUpgradeTapped: subscription.isPremium ? nil : { showPremiumSheet = true },
-            onMoreSpaceTapped: subscription.isPremium ? { requestMoreStorageByEmail() } : nil
           )
-          .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-          .listRowBackground(Color.clear)
+        ) {
+          PremiumUpsellSheetView()
+            .environmentObject(subscription)
         }
-
-        Section("Preferences") {
-          NavigationLink {
-            LanguageSelectionView()
-          } label: {
-            SettingsRowView(
-              icon: "globe",
-              title: "Language",
-              trailingText: (AppLanguage(rawValue: languageRawValue) ?? .english).title,
-              showsChevron: false
-            )
-          }
-
-          NavigationLink {
-            ThemeSelectionView()
-          } label: {
-            SettingsRowView(
-              icon: "moon.stars",
-              title: "Theme",
-              trailingText: (AppTheme(rawValue: themeRawValue) ?? .dark).title,
-              showsChevron: false
-            )
-          }
-
-          NavigationLink {
-            AboutUsView()
-          } label: {
-            SettingsRowView(icon: "info.circle", title: "About Us", showsChevron: false)
-          }
-        }
-
-        Section("Support") {
-          NavigationLink {
-            HelpCenterView()
-          } label: {
-            SettingsRowView(icon: "questionmark.circle", title: "Help Center", showsChevron: false)
-          }
-
-          Link(destination: contactSupportURL) {
-            SettingsRowView(
-              icon: "envelope",
-              title: "Contact Support",
-              trailingText: "Email",
-              showsChevron: false
-            )
-          }
-        }
-
-        Section("Legal") {
-          Button {
-            openURL(WebAppLinks.privacyPolicy)
-          } label: {
-            SettingsRowView(icon: "hand.raised", title: "Privacy Policy")
-          }
-          .buttonStyle(.plain)
-
-          Button {
-            openURL(WebAppLinks.appleStandardEULA)
-          } label: {
-            SettingsRowView(icon: "doc.plaintext", title: "Terms of Use (EULA)")
-          }
-          .buttonStyle(.plain)
-
-          Button {
-            openURL(WebAppLinks.termsOfService)
-          } label: {
-            SettingsRowView(icon: "doc.text", title: "Terms of Service")
-          }
-          .buttonStyle(.plain)
-
-          NavigationLink {
-            TermsAndConditionsView()
-          } label: {
-            SettingsRowView(icon: "doc.text", title: "Terms & Conditions", showsChevron: false)
-          }
-        }
-
-        Section {
-          Button(role: .destructive) {
-            showDeleteAccountConfirm = true
-          } label: {
-            SettingsRowView(
-              icon: "trash",
-              title: "Delete Account",
-              trailingText: nil,
-              showsChevron: false
-            )
-          }
-
-          Button {
-            showLogoutConfirm = true
-          } label: {
-            SettingsRowView(
-              icon: "rectangle.portrait.and.arrow.right",
-              title: "Log out",
-              trailingText: nil,
-              showsChevron: false
-            )
-          }
-        }
-      }
-      .listStyle(.insetGrouped)
-      .listSectionSpacing(8)
-      .navigationBarTitleDisplayMode(.inline)
-      .safeAreaInset(edge: .bottom, spacing: 0) {
-        Color.clear.frame(height: 62)
-      }
-      // On iPad, present full-screen so the subscription UI is bigger.
-      .sheet(
-        isPresented: Binding(
-          get: { showPremiumSheet && !isPad },
-          set: { newValue in
-            if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
-          }
-        )
-      ) {
-        PremiumUpsellSheetView()
-          .environmentObject(subscription)
-      }
-      .fullScreenCover(
-        isPresented: Binding(
-          get: { showPremiumSheet && isPad },
-          set: { newValue in
-            if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
-          }
-        )
-      ) {
-        PremiumUpsellSheetView()
-          .environmentObject(subscription)
-      }
-      .sheet(isPresented: $showEditProfilePicture) {
-        EditProfilePictureSheetView()
-          .presentationDetents([.height(320)])
-          .presentationDragIndicator(.visible)
-      }
-      .task {
-        // In Xcode Previews we inject a fake SubscriptionStore (e.g. proYearly).
-        // Avoid overriding it by syncing real StoreKit entitlements.
-        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-        guard !isPreview else { return }
-        await subscription.refreshFromStoreKit()
-      }
-      .task(id: session.isAuthenticated) {
-        await loadStorageUsage()
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .documentsDidChange)) { _ in
-        Task { await loadStorageUsage() }
-      }
-      .overlay {
-        if showDeleteAccountConfirm {
-          CenteredConfirmationModal(
-            title: "Delete account?",
-            message:
-              "Your account will be temporarily disabled while we process your request. All data will be permanently deleted, and you’ll receive an email confirmation once completed.",
-            confirmTitle: "Request deletion",
-            isDestructive: true,
-            onConfirm: {
-              showDeleteAccountConfirm = false
-              requestAccountDeletion()
-            },
-            onCancel: { showDeleteAccountConfirm = false }
+        .fullScreenCover(
+          isPresented: Binding(
+            get: { showPremiumSheet && isPad },
+            set: { newValue in
+              if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+            }
           )
-          .transition(.scale(scale: 0.98).combined(with: .opacity))
+        ) {
+          PremiumUpsellSheetView()
+            .environmentObject(subscription)
         }
-
-        if showLogoutConfirm {
-          CenteredConfirmationModal(
-            title: "Log out?",
-            message: "This will sign you out on this device.",
-            confirmTitle: "Log out",
-            isDestructive: true,
-            onConfirm: {
-              showLogoutConfirm = false
-              session.signOut()
-              showLoggedOutAlert = true
-            },
-            onCancel: { showLogoutConfirm = false }
-          )
-          .transition(.scale(scale: 0.98).combined(with: .opacity))
+        .sheet(isPresented: $showEditProfilePicture) {
+          EditProfilePictureSheetView()
+            .presentationDetents([.height(320)])
+            .presentationDragIndicator(.visible)
         }
-      }
-      .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showDeleteAccountConfirm)
-      .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showLogoutConfirm)
-      .alert("Account deleted", isPresented: $showAccountDeletedAlert) {
-        Button("OK", role: .cancel) {}
-      } message: {
-        Text("Local data cleared on this device.")
-      }
-      .overlay(alignment: .top) {
-        if let accountDeletionToast {
-          ProfileToastView(toast: accountDeletionToast)
-            .padding(.top, 8)
-            .transition(.move(edge: .top).combined(with: .opacity))
+        .task {
+          let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+          guard !isPreview else { return }
+          await subscription.refreshFromStoreKit()
         }
-      }
+        .task(id: session.isAuthenticated) {
+          await loadStorageUsage()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .documentsDidChange)) { _ in
+          Task { await loadStorageUsage() }
+        }
+        .overlay { profileConfirmOverlays }
+        .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showDeleteAccountConfirm)
+        .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showLogoutConfirm)
+        .alert("Account deleted", isPresented: $showAccountDeletedAlert) {
+          Button("OK", role: .cancel) {}
+        } message: {
+          Text("Local data cleared on this device.")
+        }
+        .overlay(alignment: .top) {
+          if let accountDeletionToast {
+            ProfileToastView(toast: accountDeletionToast)
+              .padding(.top, 8)
+              .transition(.move(edge: .top).combined(with: .opacity))
+          }
+        }
     }
     .task(id: session.isAuthenticated) {
       await session.refreshProfileIfNeeded()
+    }
+  }
+
+  @ViewBuilder
+  private var profileListContent: some View {
+    List {
+      Section {
+        if session.isAuthenticated {
+          if let profile = session.profile {
+            ProfileHeaderRowView(
+              name: profile.displayName,
+              email: profile.email,
+              avatarURL: profile.avatarURL,
+              badge: profileBadge
+            )
+          } else {
+            ProfileHeaderRowView(
+              name: "Loading…",
+              email: "Retrieving your profile",
+              badge: profileBadge
+            )
+          }
+        } else {
+          ProfileHeaderRowView(
+            name: "Marlon Castro",
+            email: "marlon.castro@thefndrs.com",
+            badge: profileBadge
+          )
+        }
+
+        Button {
+          showEditProfilePicture = true
+        } label: {
+          HStack(alignment: .center, spacing: 10) {
+            Text("Edit profile picture")
+              .font(.parkinsans(size: 15, weight: .medium))
+              .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
+            Spacer(minLength: 0)
+            Image(systemName: "shuffle")
+              .font(.parkinsans(size: 15, weight: .medium))
+              .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
+          }
+          .frame(maxWidth: .infinity)
+        }
+      }
+
+      Section("Subscription") {
+        HStack {
+          Text("Plan")
+          Spacer()
+          Text(planTitle)
+            .foregroundStyle(.secondary)
+        }
+
+        if let statusText = planStatusText {
+          HStack {
+            Text("Status")
+            Spacer()
+            Text(statusText)
+              .foregroundStyle(.secondary)
+          }
+        }
+
+        if let next = nextPlanText {
+          HStack {
+            Text("Next")
+            Spacer()
+            Text(next)
+              .foregroundStyle(.secondary)
+          }
+        }
+
+        Button {
+          showPremiumSheet = true
+        } label: {
+          HStack {
+            Text(subscription.isPremium ? "Change subscription" : "Upgrade")
+              .font(.parkinsans(size: 15, weight: .medium))
+              .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
+            Spacer()
+            Image(systemName: "chevron.right")
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundStyle(.secondary)
+          }
+        }
+      }
+
+      if subscription.isFounder {
+        Section("Founder") {
+          FounderHighlightCard(displayName: founderDisplayName)
+            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+            .listRowBackground(Color.clear)
+        }
+      }
+
+      Section("Storage") {
+        StorageUsageCardView(
+          usedBytes: usedBytes,
+          maxBytes: maxBytesOverride ?? subscription.maxStorageBytes,
+          isPremium: subscription.isPremium,
+          onUpgradeTapped: subscription.isPremium ? nil : { showPremiumSheet = true },
+          onMoreSpaceTapped: subscription.isPremium ? { requestMoreStorageByEmail() } : nil
+        )
+        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+        .listRowBackground(Color.clear)
+      }
+
+      Section("Preferences") {
+        // Language option — commented out for now.
+        // NavigationLink {
+        //   LanguageSelectionView()
+        // } label: {
+        //   SettingsRowView(
+        //     icon: "globe",
+        //     title: "Language",
+        //     trailingText: (AppLanguage(rawValue: languageRawValue) ?? .english).title,
+        //     showsChevron: false
+        //   )
+        // }
+
+        NavigationLink {
+          ThemeSelectionView()
+        } label: {
+          SettingsRowView(
+            icon: "moon.stars",
+            title: "Theme",
+            trailingText: (AppTheme(rawValue: themeRawValue) ?? .dark).title,
+            showsChevron: false
+          )
+        }
+
+        NavigationLink {
+          AboutUsView()
+        } label: {
+          SettingsRowView(icon: "info.circle", title: "About Us", showsChevron: false)
+        }
+      }
+
+      Section("Support") {
+        NavigationLink {
+          HelpCenterView()
+        } label: {
+          SettingsRowView(icon: "questionmark.circle", title: "Help Center", showsChevron: false)
+        }
+
+        Link(destination: contactSupportURL) {
+          SettingsRowView(
+            icon: "envelope",
+            title: "Contact Support",
+            trailingText: "Email",
+            showsChevron: false
+          )
+        }
+      }
+
+      Section("Legal") {
+        Button {
+          openURL(WebAppLinks.privacyPolicy)
+        } label: {
+          SettingsRowView(icon: "hand.raised", title: "Privacy Policy")
+        }
+        .buttonStyle(.plain)
+
+        Button {
+          openURL(WebAppLinks.appleStandardEULA)
+        } label: {
+          SettingsRowView(icon: "doc.plaintext", title: "Terms of Use (EULA)")
+        }
+        .buttonStyle(.plain)
+
+        Button {
+          openURL(WebAppLinks.termsOfService)
+        } label: {
+          SettingsRowView(icon: "doc.text", title: "Terms of Service")
+        }
+        .buttonStyle(.plain)
+
+        NavigationLink {
+          TermsAndConditionsView()
+        } label: {
+          SettingsRowView(icon: "doc.text", title: "Terms & Conditions", showsChevron: false)
+        }
+      }
+
+      Section {
+        Button(role: .destructive) {
+          showDeleteAccountConfirm = true
+        } label: {
+          SettingsRowView(
+            icon: "trash",
+            title: "Delete Account",
+            trailingText: nil,
+            showsChevron: false
+          )
+        }
+
+        Button {
+          showLogoutConfirm = true
+        } label: {
+          SettingsRowView(
+            icon: "rectangle.portrait.and.arrow.right",
+            title: "Log out",
+            trailingText: nil,
+            showsChevron: false
+          )
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var profileConfirmOverlays: some View {
+    if showDeleteAccountConfirm {
+      CenteredConfirmationModal(
+        title: "Delete account?",
+        message:
+          "Your account will be temporarily disabled while we process your request. All data will be permanently deleted, and you'll receive an email confirmation once completed.",
+        confirmTitle: "Request deletion",
+        isDestructive: true,
+        onConfirm: {
+          showDeleteAccountConfirm = false
+          requestAccountDeletion()
+        },
+        onCancel: { showDeleteAccountConfirm = false }
+      )
+      .transition(.scale(scale: 0.98).combined(with: .opacity))
+    }
+    if showLogoutConfirm {
+      CenteredConfirmationModal(
+        title: "Log out?",
+        message: "This will sign you out on this device.",
+        confirmTitle: "Log out",
+        isDestructive: true,
+        onConfirm: {
+          showLogoutConfirm = false
+          session.signOut()
+          showLoggedOutAlert = true
+        },
+        onCancel: { showLogoutConfirm = false }
+      )
+      .transition(.scale(scale: 0.98).combined(with: .opacity))
     }
   }
 

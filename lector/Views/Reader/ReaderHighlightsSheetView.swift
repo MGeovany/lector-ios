@@ -12,6 +12,8 @@ struct ReaderHighlightsSheetView: View {
 
   @State private var shareItems: [Any] = []
   @State private var isShowingShareSheet: Bool = false
+  @State private var shareSheetToken: Int = 0
+  @State private var shareInFlightHighlightID: String? = nil
   @State private var deletingID: String? = nil
 
   var body: some View {
@@ -55,8 +57,16 @@ struct ReaderHighlightsSheetView: View {
       .refreshable {
         await onRefresh()
       }
-      .sheet(isPresented: $isShowingShareSheet) {
+      .sheet(
+        isPresented: $isShowingShareSheet,
+        onDismiss: {
+          shareItems = []
+          shareInFlightHighlightID = nil
+        }
+      ) {
+        // Force re-creation when the payload changes to avoid presenting an empty sheet.
         ActivityShareSheet(items: shareItems)
+          .id(shareSheetToken)
       }
       .confirmationDialog(
         "Delete highlight?",
@@ -109,16 +119,45 @@ struct ReaderHighlightsSheetView: View {
   }
 
   private func share(highlight: RemoteHighlight) {
-    var parts: [String] = []
-    parts.append("“\(highlight.quote.trimmingCharacters(in: .whitespacesAndNewlines))”")
-    parts.append("\(book.title) — \(book.author)")
-    if let p = highlight.pageNumber {
-      parts.append("Page \(p)")
-    } else if let pr = highlight.progress {
-      parts.append("\(Int((min(1, max(0, pr)) * 100).rounded()))%")
+    // Prevent rapid re-taps while rendering the share image.
+    if let inFlight = shareInFlightHighlightID, inFlight != highlight.id { return }
+    if shareInFlightHighlightID == highlight.id { return }
+    shareInFlightHighlightID = highlight.id
+
+    let quote = highlight.quote.trimmingCharacters(in: .whitespacesAndNewlines)
+    Task { @MainActor in
+      do {
+        // Instagram generally requires an image/video; sharing plain text won't show IG targets.
+        let img = try await HighlightShareEditorView.renderShareImage(
+          quote: quote,
+          bookTitle: book.title,
+          author: book.author,
+          font: preferences.font,
+          fontSize: preferences.fontSize,
+          lineSpacing: preferences.lineSpacing,
+          theme: preferences.theme
+        )
+        shareItems = [img]
+      } catch {
+        // Fallback to text share if rendering fails.
+        var parts: [String] = []
+        parts.append("“\(quote)”")
+        parts.append("\(book.title) — \(book.author)")
+        if let p = highlight.pageNumber {
+          parts.append("Page \(p)")
+        } else if let pr = highlight.progress {
+          parts.append("\(Int((min(1, max(0, pr)) * 100).rounded()))%")
+        }
+        shareItems = [parts.joined(separator: "\n")]
+      }
+      guard !shareItems.isEmpty else {
+        shareInFlightHighlightID = nil
+        return
+      }
+      // Increment token so the controller is created with the latest items.
+      shareSheetToken &+= 1
+      isShowingShareSheet = true
     }
-    shareItems = [parts.joined(separator: "\n")]
-    isShowingShareSheet = true
   }
 }
 
@@ -130,6 +169,7 @@ private struct HighlightRowView: View {
   let onDelete: () -> Void
 
   @EnvironmentObject private var preferences: PreferencesViewModel
+  private let actionHitSize: CGFloat = 44
   private static let dateFormatter: DateFormatter = {
     let f = DateFormatter()
     f.locale = Locale(identifier: "en_US_POSIX")
@@ -152,29 +192,34 @@ private struct HighlightRowView: View {
 
         Spacer(minLength: 0)
 
-        Button(action: onShare) {
-          Image(systemName: "square.and.arrow.up")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(iconTint)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Share")
+        HStack(spacing: 14) {
+          HighlightActionButton(
+            systemName: "square.and.arrow.up",
+            accessibilityLabel: "Share",
+            hitSize: actionHitSize,
+            tint: iconTint,
+            background: iconBackground,
+            action: onShare
+          )
 
-        Button(action: onGoTo) {
-          Image(systemName: "arrow.turn.down.right")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(iconTint)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Go to page")
+          HighlightActionButton(
+            systemName: "arrow.turn.down.right",
+            accessibilityLabel: "Go to page",
+            hitSize: actionHitSize,
+            tint: iconTint,
+            background: iconBackground,
+            action: onGoTo
+          )
 
-        Button(action: onDelete) {
-          Image(systemName: "trash")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(iconTint)
+          HighlightActionButton(
+            systemName: "trash",
+            accessibilityLabel: "Delete",
+            hitSize: actionHitSize,
+            tint: iconTint,
+            background: iconBackground,
+            action: onDelete
+          )
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Delete")
       }
     }
     .padding(14)
@@ -188,6 +233,11 @@ private struct HighlightRowView: View {
               lineWidth: 1)
         )
     )
+    // Make the whole card tappable to navigate to the highlight.
+    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .onTapGesture {
+      onGoTo()
+    }
   }
 
   private var metaText: String {
@@ -203,6 +253,32 @@ private struct HighlightRowView: View {
 
   private var iconTint: Color {
     preferences.theme.surfaceSecondaryText.opacity(0.62)
+  }
+
+  private var iconBackground: Color {
+    preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.05 : 0.08)
+  }
+}
+
+private struct HighlightActionButton: View {
+  let systemName: String
+  let accessibilityLabel: String
+  let hitSize: CGFloat
+  let tint: Color
+  let background: Color
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: systemName)
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundStyle(tint)
+        .frame(width: hitSize, height: hitSize)
+        .background(background, in: Circle())
+        .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(accessibilityLabel)
   }
 }
 

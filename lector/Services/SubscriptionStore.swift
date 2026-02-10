@@ -131,12 +131,6 @@ final class SubscriptionStore: ObservableObject {
     }
 
     do {
-      #if DEBUG
-        // If the user is "ignoring" Founder in debug, un-ignore before attempting to buy it.
-        if newPlan == .founderLifetime {
-          StoreKitService.debugIgnoreFounderEntitlement = false
-        }
-      #endif
       try await storeKit.loadProducts()
       let ent = try await storeKit.purchase(plan: newPlan)
       apply(entitlement: ent)
@@ -197,20 +191,6 @@ final class SubscriptionStore: ObservableObject {
         (error as? LocalizedError)?.errorDescription ?? "Couldn’t open subscriptions."
     }
   }
-
-  #if DEBUG
-    var debugIsIgnoringFounderPurchase: Bool {
-      StoreKitService.debugIgnoreFounderEntitlement
-    }
-
-    /// Debug-only: "forget" Founder entitlement in-app (sandbox/local) so you can test Free/Pro flows.
-    /// Note: StoreKit non-consumables can't be truly "cancelled" via API; this is an app-side override.
-    @MainActor
-    func debugSetIgnoreFounderPurchase(_ ignore: Bool) async {
-      StoreKitService.debugIgnoreFounderEntitlement = ignore
-      await refreshFromStoreKit()
-    }
-  #endif
 
   @MainActor
   func priceText(for plan: SubscriptionPlan) -> String? {
@@ -295,15 +275,6 @@ enum StoreKitServiceError: LocalizedError {
 /// StoreKit 2 service that backs subscription UI and state.
 @MainActor
 final class StoreKitService: ObservableObject {
-  #if DEBUG
-    static let debugIgnoreFounderKey = "lector_debug_ignore_founder_entitlement"
-
-    static var debugIgnoreFounderEntitlement: Bool {
-      get { UserDefaults.standard.bool(forKey: debugIgnoreFounderKey) }
-      set { UserDefaults.standard.set(newValue, forKey: debugIgnoreFounderKey) }
-    }
-  #endif
-
   struct ProductIDs: Equatable {
     let proMonthly: String
     let proYearly: String
@@ -473,19 +444,12 @@ final class StoreKitService: ObservableObject {
   private static func bestEntitlementFromCurrentEntitlements() async -> Entitlement? {
     var best: Entitlement?
 
-    #if DEBUG
-      let ignoreFounder = debugIgnoreFounderEntitlement
-    #endif
-
     for await result in Transaction.currentEntitlements {
       guard let transaction = try? requireVerified(result) else { continue }
 
       let plan: SubscriptionPlan = {
         if let ids = loadProductIDsFromInfoPlist() {
           if transaction.productID == ids.founderLifetime {
-            #if DEBUG
-              if ignoreFounder { return .free }
-            #endif
             return .founderLifetime
           }
           if transaction.productID == ids.proYearly { return .proYearly }

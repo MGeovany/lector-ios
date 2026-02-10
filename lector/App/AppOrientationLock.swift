@@ -15,17 +15,11 @@ enum AppOrientationLock {
   }
 
   static func lock(to mask: UIInterfaceOrientationMask) {
-#if DEBUG
-    print("[OrientationLock] lock -> \(mask)")
-#endif
     lockedMask = mask
     apply(mask: mask)
   }
 
   static func unlock() {
-#if DEBUG
-    print("[OrientationLock] unlock")
-#endif
     lockedMask = nil
     apply(mask: defaultMask)
   }
@@ -45,9 +39,6 @@ enum AppOrientationLock {
       if let scene = activeWindowScene() {
         let prefs = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: mask)
         scene.requestGeometryUpdate(prefs) { error in
-#if DEBUG
-          print("[OrientationLock] requestGeometryUpdate error: \(error)")
-#endif
         }
       }
     }

@@ -3,6 +3,7 @@ import SwiftUI
 struct LibrarySectionTabsView: View {
   @Binding var selected: LibrarySection
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.locale) private var locale
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -39,7 +40,7 @@ struct LibrarySectionTabsView: View {
   private func tabLabel(for section: LibrarySection) -> some View {
     let isSelected = selected == section
     return HStack(alignment: .firstTextBaseline, spacing: 6) {
-      Text(section.title)
+      Text(L10n.tr(section.title, locale: locale))
         .font(.custom("serif", size: 34))
         .foregroundStyle(titleColor(isSelected: isSelected))
         .lineLimit(1)
@@ -51,7 +52,7 @@ struct LibrarySectionTabsView: View {
         .baselineOffset(18)
     }
     .padding(.vertical, 8)
-    .accessibilityLabel(section.title)
+    .accessibilityLabel(L10n.tr(section.title, locale: locale))
   }
 
   private func sectionIndexText(for section: LibrarySection) -> String {

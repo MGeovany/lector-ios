@@ -6,6 +6,7 @@ import UIKit
 /// - **Reader theme** (reader only): `ReadingTheme` — day/night/amber for the reading surface. Drives status bar *while* in reader.
 struct ReaderView: View {
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.scenePhase) private var scenePhase
   @EnvironmentObject private var preferences: PreferencesViewModel
   @AppStorage(AppPreferenceKeys.theme) private var appThemeRawValue: String = AppTheme.dark.rawValue
 
@@ -16,6 +17,14 @@ struct ReaderView: View {
   @StateObject private var viewModel = ReaderViewModel()
   @StateObject private var audiobook = ReaderAudiobookViewModel()
   @StateObject private var networkMonitor = NetworkMonitor.shared
+
+  private struct ReaderLayout {
+    let focusEnabled: Bool
+    let showEdges: Bool
+    let isFullBrightness: Bool
+    let contentMaxWidth: CGFloat?
+    let outerHorizontalPadding: CGFloat
+  }
 
   @State private var search = ReaderSearchState()
   @State private var highlight = ReaderHighlightState()
@@ -35,6 +44,11 @@ struct ReaderView: View {
   @State private var offlineMeta: RemoteOptimizedDocument? = nil
   @State private var offlineLastAutoDownloadAt: Date? = nil
   @State private var offlineMonitorTask: Task<Void, Never>? = nil
+  @State private var offlineDownloadTask: Task<Void, Never>? = nil
+  @State private var offlineDownloadGeneration: Int = 0
+  // Used to force UI refresh when local offline files change.
+  @State private var offlineAvailabilityToken: Int = 0
+  @State private var offlineIsAvailableState: Bool = false
 
   @State private var isDismissing: Bool = false
   @State private var didStartLoading: Bool = false
@@ -44,6 +58,13 @@ struct ReaderView: View {
   @State private var focusAutoHideTask: Task<Void, Never>? = nil
   @State private var focusSwipeInFlight: Bool = false
 
+  @State private var activeScreen: UIScreen? = nil
+  @State private var originalSystemBrightness: CGFloat? = nil
+
+  // Pinch-to-zoom font sizing (reader surface).
+  @State private var pinchBaseFontSize: Double? = nil
+  @State private var pinchLastAppliedFontSize: Double? = nil
+
   private let documentsService: DocumentsServicing = GoDocumentsService()
   private let readingPositionService: ReadingPositionServicing = GoReadingPositionService()
   private let highlightsService: HighlightsServicing = GoHighlightsService()
@@ -51,13 +72,11 @@ struct ReaderView: View {
   @State private var documentHighlights: [RemoteHighlight] = []
   @State private var isHighlightsSheetPresented: Bool = false
 
-  private let shortDocContinuousScrollMaxPages: Int = 10
   private let horizontalPadding: CGFloat = 20
-  #if DEBUG
-    private let debugScrollLogs: Bool = true
-  #else
-    private let debugScrollLogs: Bool = false
-  #endif
+  private let readerFontSizeMin: Double = 14
+  private let readerFontSizeMax: Double = 26
+  private let readerFontSizeStep: Double = 0.25
+  private let debugScrollLogs: Bool = false
 
   init(
     book: Book,
@@ -71,325 +90,88 @@ struct ReaderView: View {
   }
 
   var body: some View {
-    let focusEnabled = settings.isLocked
-    let showEdges = !focusEnabled || chrome.isVisible
+    let layout = makeLayout()
+    let scaffold = readerScaffold(layout: layout)
 
-    ZStack {
-      Group {
-        if settings.isPresented {
-          if preferences.theme == .day {
-            Color(red: 248.0 / 255.0, green: 248.0 / 255.0, blue: 248.0 / 255.0)
-          } else if preferences.theme == .night {
-            Color(red: 10.0 / 255.0, green: 10.0 / 255.0, blue: 10.0 / 255.0)
-          } else {
-            preferences.theme.surfaceBackground
-          }
-        } else {
-          preferences.theme.surfaceBackground
-        }
+    return scaffold
+      .toolbar(.hidden, for: .tabBar)
+      .toolbar(.hidden, for: .navigationBar)
+      .preferredColorScheme(readerStatusBarScheme)
+      .environment(\.colorScheme, readerStatusBarScheme)
+      .navigationBarBackButtonHidden(true)
+      .preference(key: TabBarHiddenPreferenceKey.self, value: !isDismissing)
+      .onAppear {
+        applyReaderBrightnessIfPossible()
       }
-      .ignoresSafeArea()
-
-      VStack(spacing: 0) {
-        if showEdges {
-          ReaderCollapsibleTopBar(isVisible: true, measuredHeight: $chrome.measuredHeight) {
-            ReaderTopBarView(
-              horizontalPadding: horizontalPadding,
-              showReaderSettings: $settings.isPresented,
-              onShowHighlights: {
-                isHighlightsSheetPresented = true
-              },
-              onBack: handleBack
-            )
-          }
-        }
-
-        GeometryReader { geo in
-          let settingsGap: CGFloat = 16
-
-          ReaderContentScrollView(
-            book: book,
-            viewModel: viewModel,
-            headerModel: ReaderHeaderModel(book: book, pages: viewModel.pages),
-            horizontalPadding: horizontalPadding,
-            shouldUseContinuousScroll: shouldUseContinuousScroll,
-            showTopChrome: showEdges,
-            highlights: documentHighlights,
-            showSearch: $search.isVisible,
-            searchQuery: $search.query,
-            clearSelectionToken: $highlight.clearSelectionToken,
-            scrollOffsetY: $scroll.offsetY,
-            scrollContentHeight: $scroll.contentHeight,
-            scrollViewportHeight: $scroll.viewportHeight,
-            scrollInsetTop: $scroll.insetTop,
-            scrollInsetBottom: $scroll.insetBottom,
-            scrollProgress: $scroll.progress,
-            didRestoreContinuousScroll: $scroll.didRestoreContinuousScroll,
-            didAttachKVOScrollMetrics: $scroll.didAttachKVOScrollMetrics,
-            restoreProgress: continuousRestoreProgress,
-            debugScrollLogs: debugScrollLogs,
-            onScrollStateChange: handleScrollStateChange,
-            onShareSelection: { text, page, progress in
-              highlight.present(text: text, pageNumber: page, progress: progress)
-            },
-            onPagedProgressChange: { page, total in
-              onProgressChange?(page, total, nil)
-            },
-            scrollToPageIndex: $audiobookScrollToIndex,
-            scrollToPageToken: $audiobookScrollToToken
-          )
-          .contentShape(Rectangle())
-          .simultaneousGesture(
-            TapGesture().onEnded {
-              guard focusEnabled else { return }
-              withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
-                chrome.isVisible.toggle()
-              }
-              if chrome.isVisible {
-                scheduleFocusAutoHide()
-              } else {
-                cancelFocusAutoHide()
-              }
-            }
-          )
-          .simultaneousGesture(
-            DragGesture(minimumDistance: 16, coordinateSpace: .local)
-              .onEnded { value in
-                guard focusEnabled else { return }
-                guard !settings.isPresented else { return }
-                guard !search.isVisible else { return }
-                guard !highlight.isPresented else { return }
-                guard !viewModel.isLoading else { return }
-                guard !focusSwipeInFlight else { return }
-
-                let dx = value.translation.width
-                let dy = value.translation.height
-
-                guard abs(dx) > max(24, abs(dy) * 1.35) else { return }
-
-                focusSwipeInFlight = true
-                defer {
-                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
-                    focusSwipeInFlight = false
-                  }
-                }
-
-                if dx > 60 {
-                  focusSwipeAdvancePage()
-                } else if dx < -60 {
-                  focusSwipeGoBackPage()
-                }
-              }
-          )
-          .onChange(of: geo.size, initial: true) { _, newSize in
-            startLoadingIfNeeded(container: newSize)
-          }
-          .onChange(of: viewModel.pages) { _, newPages in
-            audiobook.updatePages(newPages)
-          }
-          .onChange(of: viewModel.currentIndex) { _, idx in
-            if audiobookEnabled {
-              audiobook.userDidNavigate(to: idx)
-              if shouldUseContinuousScroll {
-                requestScrollToPage(idx)
-              }
-            }
-          }
-          .padding(.top, settings.isPresented ? 14 : 0)
-          .padding(.bottom, settings.isPresented ? settingsGap : 0)
-          .background {
-            RoundedRectangle(
-              cornerRadius: settings.isPresented ? 28 : 0,
-              style: .continuous
-            )
-            .fill(settings.isPresented ? preferences.theme.surfaceBackground : Color.clear)
-          }
-          .clipShape(
-            RoundedRectangle(
-              cornerRadius: settings.isPresented ? 28 : 0,
-              style: .continuous,
-            )
-          )
-          .overlay {
-            if settings.isPresented {
-              RoundedRectangle(
-                cornerRadius: 28,
-                style: .continuous
-              )
-              .stroke(
-                preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.08 : 0.12),
-                lineWidth: 1
-              )
-            }
-          }
-          .shadow(
-            color: {
-              guard settings.isPresented else { return Color.clear }
-              switch preferences.theme {
-              case .day:
-                return Color.black.opacity(0.08)
-              case .night:
-                return Color.black.opacity(0.25)
-              case .amber:
-                return Color.black.opacity(0.12)
-              }
-            }(),
-            radius: settings.isPresented ? 12 : 0,
-            x: 0,
-            y: 0
-          )
-          .padding(.horizontal, settings.isPresented ? 16 : 0)
-          .animation(.spring(response: 0.35, dampingFraction: 0.85), value: settings.isPresented)
-          .onAppear {
-            chrome.lastScrollOffsetY = scroll.offsetY
-            if shouldUseContinuousScroll, scroll.offsetY > 40 {
-              chrome.isVisible = false
-            }
-          }
-          .onChange(of: scroll.didRestoreContinuousScroll) { _, restored in
-            guard restored else { return }
-            if shouldUseContinuousScroll, scroll.offsetY > 40, !search.isVisible {
-              withAnimation(.spring(response: 0.24, dampingFraction: 0.9)) {
-                chrome.isVisible = false
-              }
-            }
-            chrome.lastScrollOffsetY = scroll.offsetY
-          }
-          .safeAreaInset(edge: .bottom, spacing: 12) {
-            if showEdges, audiobookEnabled, !audiobook.isConverting, !settings.isPresented {
-              let total = max(1, viewModel.pages.count)
-              let idx = min(max(0, audiobook.currentPageIndex), max(0, total - 1))
-              let overall = min(
-                1.0, max(0.0, (Double(idx) + audiobook.pageProgress) / Double(total)))
-
-              ReaderAudiobookControlsView(
-                isPlaying: audiobook.isPlaying,
-                progress: overall,
-                pageLabel: "\(idx + 1) of \(total)",
-                onPreviousPage: {
-                  audiobook.previousPage()
-                },
-                onBack5: {
-                  audiobook.skipBackward5Seconds()
-                },
-                onPlayPause: {
-                  audiobook.togglePlayPause()
-                },
-                onForward5: {
-                  audiobook.skipForward5Seconds()
-                },
-                onNextPage: {
-                  audiobook.nextPage()
-                }
-              )
-              .environmentObject(preferences)
-              .padding(.horizontal, 12)
-              .padding(.bottom, 6)
-              .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-          }
-          .safeAreaInset(edge: .bottom, spacing: 0) {
-            if showEdges {
-              ReaderSettingsPanelView(
-                containerHeight: geo.size.height,
-                isPresented: $settings.isPresented,
-                dragOffset: $settings.dragOffset,
-                isLocked: $settings.isLocked,
-                searchVisible: $search.isVisible,
-                searchQuery: $search.query,
-                audiobookEnabled: $audiobookEnabled,
-                onEnableAudiobook: enableAudiobook,
-                onDisableAudiobook: disableAudiobook,
-                offlineEnabled: $offlineEnabled,
-                onEnableOffline: enableOffline,
-                onDisableOffline: disableOffline,
-                offlineSubtitle: offlineSubtitle,
-                offlineIsAvailable: offlineIsAvailable,
-                askAI: askAI
-              )
-              .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-          }
-
-        }
-
-        if showEdges, !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {
-          ReaderBottomPagerView(
-            currentIndex: viewModel.currentIndex,
-            totalPages: viewModel.pages.count,
-            onPrevious: viewModel.goToPreviousPage,
-            onNext: viewModel.goToNextPage
-          )
+      .onDisappear {
+        restoreSystemBrightnessIfNeeded()
+      }
+      .onChange(of: preferences.brightness) { _, _ in
+        applyReaderBrightnessIfPossible()
+      }
+      .onChange(of: activeScreen) { _, _ in
+        applyReaderBrightnessIfPossible()
+      }
+      .onChange(of: scenePhase) { _, newPhase in
+        // Restore when leaving active, re-apply when returning.
+        switch newPhase {
+        case .active:
+          applyReaderBrightnessIfPossible()
+        case .inactive, .background:
+          restoreSystemBrightnessIfNeeded()
+        @unknown default:
+          break
         }
       }
       .overlay {
-        let b = min(1.0, max(0.0, preferences.brightness))
-        let dim = min(0.78, max(0.0, (1.0 - b) * 0.90))
-        if dim > 0.001 {
-          Color.black.opacity(dim)
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-        }
-      }
-      .frame(maxWidth: 720)
-      .frame(maxWidth: .infinity)
-      .padding(.horizontal, settings.isPresented ? 0 : (showEdges ? 12 : 6))
-    }
-    .toolbar(.hidden, for: .tabBar)
-    .toolbar(.hidden, for: .navigationBar)
-    .preferredColorScheme(readerStatusBarScheme)
-    .environment(\.colorScheme, readerStatusBarScheme)
-    .navigationBarBackButtonHidden(true)
-    .preference(key: TabBarHiddenPreferenceKey.self, value: !isDismissing)
-    .overlay {
-      if highlight.isPresented {
-        HighlightShareEditorView(
-          quote: highlight.selectedText,
-          bookTitle: book.title,
-          author: book.author,
-          documentID: book.remoteID,
-          pageNumber: highlight.pageNumber,
-          progress: highlight.progress,
-          onDismiss: {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-              highlight.dismiss()
-            }
-            if let id = book.remoteID, !id.isEmpty {
-              Task {
-                try? await Task.sleep(nanoseconds: 600_000_000)
-                documentHighlights =
-                  (try? await highlightsService.listHighlights(documentID: id)) ?? []
+        if highlight.isPresented {
+          HighlightShareEditorView(
+            quote: highlight.selectedText,
+            bookTitle: book.title,
+            author: book.author,
+            documentID: book.remoteID,
+            pageNumber: highlight.pageNumber,
+            progress: highlight.progress,
+            onDismiss: {
+              withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                highlight.dismiss()
+              }
+              if let id = book.remoteID, !id.isEmpty {
+                Task {
+                  try? await Task.sleep(nanoseconds: 600_000_000)
+                  documentHighlights =
+                    (try? await highlightsService.listHighlights(documentID: id)) ?? []
+                }
               }
             }
+          )
+          .environmentObject(preferences)
+          .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        }
+      }
+      .sheet(isPresented: $isHighlightsSheetPresented) {
+        ReaderHighlightsSheetView(
+          book: book,
+          highlights: $documentHighlights,
+          onGoToHighlight: { h in
+            goToHighlight(h)
+          },
+          onDeleteHighlight: { h in
+            await deleteHighlight(h)
+          },
+          onRefresh: {
+            await refreshHighlights()
           }
         )
         .environmentObject(preferences)
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        .presentationDetents([.medium, .large])
       }
-    }
-    .sheet(isPresented: $isHighlightsSheetPresented) {
-      ReaderHighlightsSheetView(
-        book: book,
-        highlights: $documentHighlights,
-        onGoToHighlight: { h in
-          goToHighlight(h)
-        },
-        onDeleteHighlight: { h in
-          await deleteHighlight(h)
-        },
-        onRefresh: {
-          await refreshHighlights()
+      .overlay {
+        if audiobook.isConverting {
+          ReaderAudiobookConvertingOverlayView()
+            .environmentObject(preferences)
         }
-      )
-      .environmentObject(preferences)
-      .presentationDetents([.medium, .large])
-    }
-    .overlay {
-      if audiobook.isConverting {
-        ReaderAudiobookConvertingOverlayView()
-          .environmentObject(preferences)
       }
-    }
     .overlay(alignment: .bottom) {
       if isOfflineSaving {
         HStack(spacing: 10) {
@@ -430,10 +212,10 @@ struct ReaderView: View {
       }
     }
     .onChange(of: settings.isPresented) { _, isPresented in
-      if focusEnabled, !isPresented, chrome.isVisible {
+      if settings.isLocked, !isPresented, chrome.isVisible {
         scheduleFocusAutoHide()
       }
-      if focusEnabled, isPresented {
+      if settings.isLocked, isPresented {
         cancelFocusAutoHide()
       }
       if isPresented {
@@ -445,22 +227,13 @@ struct ReaderView: View {
     .onChange(of: scroll.progress) { _, _ in updateAskAIPageContext() }
     .onAppear {
       networkMonitor.startIfNeeded()
-      #if DEBUG
-        print(
-          "[ReaderView] onAppear docID=\(book.remoteID ?? "nil") readerStatusBarScheme=\(readerStatusBarScheme) appThemeColorScheme=\(appThemeColorScheme)"
-        )
-      #endif
       applyReaderStatusBarStyle(readerStatusBarScheme)
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
         applyReaderStatusBarStyle(readerStatusBarScheme)
-        #if DEBUG
-          print(
-            "[ReaderView] onAppear delayed re-apply docID=\(book.remoteID ?? "nil") readerStatusBarScheme=\(readerStatusBarScheme)"
-          )
-        #endif
       }
       if let id = book.remoteID, !id.isEmpty {
         offlineEnabled = OfflinePinStore.isPinned(remoteID: id)
+        offlineIsAvailableState = OptimizedPagesStore.hasLocalCopy(remoteID: id)
         refreshOfflineSubtitle(remoteID: id)
 
         startOfflineMonitor(remoteID: id)
@@ -487,24 +260,403 @@ struct ReaderView: View {
       updateAskAIPageContext()
     }
     .onChange(of: readerStatusBarScheme, initial: true) { _, newScheme in
-      #if DEBUG
-        print(
-          "[ReaderView] onChange(readerStatusBarScheme) docID=\(book.remoteID ?? "nil") initial/change -> newScheme=\(newScheme)"
-        )
-      #endif
       applyReaderStatusBarStyle(newScheme)
     }
     .onDisappear {
-      #if DEBUG
-        print(
-          "[ReaderView] onDisappear docID=\(book.remoteID ?? "nil") restoring appThemeColorScheme=\(appThemeColorScheme)"
-        )
-      #endif
       applyReaderStatusBarStyle(appThemeColorScheme)
       disableAudiobook()
       cancelFocusAutoHide()
       stopOfflineMonitor()
     }
+  }
+
+  private var readerBackgroundView: some View {
+    readerBackgroundColor
+      .ignoresSafeArea()
+      // Capture the actual screen for "native" brightness control.
+      .background(
+        ReaderScreenAccessor { screen in
+          activeScreen = screen
+        }
+        .frame(width: 0, height: 0)
+      )
+  }
+
+  private var readerBackgroundColor: Color {
+    // Keep the reader surface background stable while the settings panel is up.
+    if settings.isPresented {
+      switch preferences.theme {
+      case .day:
+        return Color(red: 248.0 / 255.0, green: 248.0 / 255.0, blue: 248.0 / 255.0)
+      case .night:
+        return Color(red: 10.0 / 255.0, green: 10.0 / 255.0, blue: 10.0 / 255.0)
+      case .amber:
+        return preferences.theme.surfaceBackground
+      }
+    }
+    return preferences.theme.surfaceBackground
+  }
+
+  private func readerOuterHorizontalPadding(showEdges: Bool, isFullBrightness: Bool) -> CGFloat {
+    if settings.isPresented { return 0 }
+    if isFullBrightness { return 0 }
+    return showEdges ? 12 : 6
+  }
+
+  private func makeLayout() -> ReaderLayout {
+    let focusEnabled: Bool = settings.isLocked
+    let showEdges: Bool = !focusEnabled || chrome.isVisible
+    let isFullBrightness: Bool = preferences.brightness >= 0.999
+
+    let contentMaxWidth: CGFloat? = (isFullBrightness && !settings.isPresented) ? .infinity : 720
+    let outerHorizontalPadding: CGFloat = readerOuterHorizontalPadding(
+      showEdges: showEdges,
+      isFullBrightness: isFullBrightness
+    )
+
+    return ReaderLayout(
+      focusEnabled: focusEnabled,
+      showEdges: showEdges,
+      isFullBrightness: isFullBrightness,
+      contentMaxWidth: contentMaxWidth,
+      outerHorizontalPadding: outerHorizontalPadding
+    )
+  }
+
+  private func readerScaffold(layout: ReaderLayout) -> some View {
+    let mainStack = VStack(spacing: 0) {
+      if layout.showEdges {
+        ReaderCollapsibleTopBar(isVisible: true, measuredHeight: $chrome.measuredHeight) {
+          ReaderTopBarView(
+            horizontalPadding: horizontalPadding,
+            showReaderSettings: $settings.isPresented,
+            onShowHighlights: { isHighlightsSheetPresented = true },
+            onBack: handleBack
+          )
+        }
+      }
+
+      GeometryReader { geo in
+        readerScrollSurface(
+          geo: geo,
+          showEdges: layout.showEdges,
+          focusEnabled: layout.focusEnabled
+        )
+      }
+      // Allow paged mode to use the bottom safe-area space (user wants text + pager down there).
+      .ignoresSafeArea(.container, edges: .bottom)
+    }
+    // When brightness is at 100%, avoid the "boxed" look by letting the reading surface go full-bleed.
+    .frame(maxWidth: layout.contentMaxWidth)
+    .frame(maxWidth: .infinity)
+    .padding(.horizontal, layout.outerHorizontalPadding)
+
+    return ZStack {
+      readerBackgroundView
+      mainStack
+    }
+    // Dim overlay should cover the full reader (including side margins).
+    .overlay { readerBrightnessDimOverlay }
+  }
+
+  private var readerDimOpacity: Double {
+    // If the user wants the reader dimmer than the device's current brightness,
+    // apply a black overlay. If they want it brighter, we raise system brightness instead.
+    let desired: Double = min(1.0, max(0.0, preferences.brightness))
+    let original: Double = Double(originalSystemBrightness ?? 1.0)
+    let sys: Double = max(original, desired)
+    let dim: Double = sys > 0.001 ? min(0.92, max(0.0, 1.0 - (desired / sys))) : 0.0
+    return dim
+  }
+
+  @ViewBuilder
+  private var readerBrightnessDimOverlay: some View {
+    let dim: Double = readerDimOpacity
+    if dim > 0.001 {
+      Color.black.opacity(dim)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+  }
+
+  private var readerSurfaceShadowColor: Color {
+    guard settings.isPresented else { return Color.clear }
+    switch preferences.theme {
+    case .day:
+      return Color.black.opacity(0.05)
+    case .night:
+      return Color.black.opacity(0.18)
+    case .amber:
+      return Color.black.opacity(0.08)
+    }
+  }
+
+  @ViewBuilder
+  private func readerScrollSurface(
+    geo: GeometryProxy,
+    showEdges: Bool,
+    focusEnabled: Bool
+  ) -> some View {
+    let settingsGap: CGFloat = 16
+    let surfaceCornerRadius: CGFloat = settings.isPresented ? 28 : 0
+    let surfaceTopPadding: CGFloat = settings.isPresented ? 14 : 0
+    let surfaceBottomPadding: CGFloat = settings.isPresented ? settingsGap : 0
+    let surfaceHorizontalPadding: CGFloat = settings.isPresented ? 16 : 0
+
+    ReaderContentScrollView(
+      book: book,
+      viewModel: viewModel,
+      headerModel: ReaderHeaderModel(book: book, pages: viewModel.pages),
+      horizontalPadding: horizontalPadding,
+      shouldUseContinuousScroll: shouldUseContinuousScroll,
+      showTopChrome: showEdges,
+      // Bottom pager is an overlay that covers text at the bottom edge.
+      showBottomPagerOverlay: showEdges && !shouldUseContinuousScroll && !settings.isPresented
+        && !audiobookEnabled,
+      highlights: documentHighlights,
+      showSearch: $search.isVisible,
+      searchQuery: $search.query,
+      clearSelectionToken: $highlight.clearSelectionToken,
+      scrollOffsetY: $scroll.offsetY,
+      scrollContentHeight: $scroll.contentHeight,
+      scrollViewportHeight: $scroll.viewportHeight,
+      scrollInsetTop: $scroll.insetTop,
+      scrollInsetBottom: $scroll.insetBottom,
+      scrollProgress: $scroll.progress,
+      didRestoreContinuousScroll: $scroll.didRestoreContinuousScroll,
+      didAttachKVOScrollMetrics: $scroll.didAttachKVOScrollMetrics,
+      restoreProgress: continuousRestoreProgress,
+      debugScrollLogs: debugScrollLogs,
+      onScrollStateChange: handleScrollStateChange,
+      onShareSelection: { text, page, progress in
+        highlight.present(text: text, pageNumber: page, progress: progress)
+      },
+      onPagedProgressChange: { page, total in
+        onProgressChange?(page, total, nil)
+      },
+      scrollToPageIndex: $audiobookScrollToIndex,
+      scrollToPageToken: $audiobookScrollToToken
+    )
+    .contentShape(Rectangle())
+    .simultaneousGesture(
+      TapGesture().onEnded {
+        guard focusEnabled else { return }
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+          chrome.isVisible.toggle()
+        }
+        if chrome.isVisible {
+          scheduleFocusAutoHide()
+        } else {
+          cancelFocusAutoHide()
+        }
+      }
+    )
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 16, coordinateSpace: .local)
+        .onEnded { value in
+          guard !settings.isPresented else { return }
+          guard !search.isVisible else { return }
+          guard !highlight.isPresented else { return }
+          guard !viewModel.isLoading else { return }
+          guard !focusSwipeInFlight else { return }
+
+          let dx: CGFloat = value.translation.width
+          let dy: CGFloat = value.translation.height
+
+          guard abs(dx) > max(24, abs(dy) * 1.35) else { return }
+
+          focusSwipeInFlight = true
+          defer {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+              focusSwipeInFlight = false
+            }
+          }
+
+          // UX: swipe right→left (left swipe) = next, left→right (right swipe) = back.
+          if dx < -60 {
+            focusSwipeAdvancePage()
+          } else if dx > 60 {
+            focusSwipeGoBackPage()
+          }
+        }
+    )
+    .simultaneousGesture(
+      MagnificationGesture()
+        .onChanged { scale in
+          guard !settings.isPresented else { return }
+          guard !search.isVisible else { return }
+          guard !highlight.isPresented else { return }
+          guard !viewModel.isLoading else { return }
+
+          if pinchBaseFontSize == nil {
+            pinchBaseFontSize = preferences.fontSize
+            pinchLastAppliedFontSize = preferences.fontSize
+          }
+
+          let base = pinchBaseFontSize ?? preferences.fontSize
+          var next = base * Double(scale)
+          next = clamp(next, min: readerFontSizeMin, max: readerFontSizeMax)
+          next = quantize(next, step: readerFontSizeStep)
+
+          // Avoid excessive re-renders while pinching.
+          if let last = pinchLastAppliedFontSize, abs(next - last) < (readerFontSizeStep * 0.5) {
+            return
+          }
+          pinchLastAppliedFontSize = next
+
+          if next != preferences.fontSize {
+            preferences.fontSize = next
+          }
+        }
+        .onEnded { _ in
+          pinchBaseFontSize = nil
+          pinchLastAppliedFontSize = nil
+          // Clamp once more and persist.
+          preferences.fontSize = clamp(
+            preferences.fontSize, min: readerFontSizeMin, max: readerFontSizeMax)
+          preferences.save()
+          // Clear any active text selection to avoid weird selection/handles after resizing.
+          highlight.clearSelectionToken &+= 1
+        }
+    )
+    .onChange(of: geo.size, initial: true) { _, newSize in
+      startLoadingIfNeeded(container: newSize)
+    }
+    .onChange(of: viewModel.pages) { _, newPages in
+      audiobook.updatePages(newPages)
+    }
+    .onChange(of: viewModel.currentIndex) { _, idx in
+      if audiobookEnabled {
+        audiobook.userDidNavigate(to: idx)
+        if shouldUseContinuousScroll {
+          requestScrollToPage(idx)
+        }
+      }
+    }
+    .padding(.top, surfaceTopPadding)
+    .padding(.bottom, surfaceBottomPadding)
+    .background {
+      RoundedRectangle(cornerRadius: surfaceCornerRadius, style: .continuous)
+        .fill(settings.isPresented ? preferences.theme.surfaceBackground : Color.clear)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: surfaceCornerRadius, style: .continuous))
+    .overlay {
+      if settings.isPresented {
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
+          .stroke(
+            preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.08 : 0.12),
+            lineWidth: 1
+          )
+      }
+    }
+    .shadow(
+      color: readerSurfaceShadowColor,
+      radius: settings.isPresented ? 8 : 0,
+      x: 0,
+      y: 0
+    )
+    .padding(.horizontal, surfaceHorizontalPadding)
+    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: settings.isPresented)
+    .onAppear {
+      chrome.lastScrollOffsetY = scroll.offsetY
+      if shouldUseContinuousScroll, scroll.offsetY > 40 {
+        chrome.isVisible = false
+      }
+    }
+    .onChange(of: scroll.didRestoreContinuousScroll) { _, restored in
+      guard restored else { return }
+      if shouldUseContinuousScroll, scroll.offsetY > 40, !search.isVisible {
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.9)) {
+          chrome.isVisible = false
+        }
+      }
+      chrome.lastScrollOffsetY = scroll.offsetY
+    }
+    .safeAreaInset(edge: .bottom, spacing: 12) {
+      if showEdges, audiobookEnabled, !audiobook.isConverting, !settings.isPresented {
+        let total: Int = max(1, viewModel.pages.count)
+        let idx: Int = min(max(0, audiobook.currentPageIndex), max(0, total - 1))
+        let overall: Double = min(
+          1.0,
+          max(0.0, (Double(idx) + audiobook.pageProgress) / Double(total))
+        )
+
+        ReaderAudiobookControlsView(
+          isPlaying: audiobook.isPlaying,
+          progress: overall,
+          pageLabel: "\(idx + 1) of \(total)",
+          onPreviousPage: { audiobook.previousPage() },
+          onBack5: { audiobook.skipBackward5Seconds() },
+          onPlayPause: { audiobook.togglePlayPause() },
+          onForward5: { audiobook.skipForward5Seconds() },
+          onNextPage: { audiobook.nextPage() }
+        )
+        .environmentObject(preferences)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+    }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      if showEdges {
+        ReaderSettingsPanelView(
+          containerHeight: geo.size.height,
+          isPresented: $settings.isPresented,
+          dragOffset: $settings.dragOffset,
+          isLocked: $settings.isLocked,
+          searchVisible: $search.isVisible,
+          searchQuery: $search.query,
+          audiobookEnabled: $audiobookEnabled,
+          onEnableAudiobook: enableAudiobook,
+          onDisableAudiobook: disableAudiobook,
+          offlineEnabled: $offlineEnabled,
+          onEnableOffline: enableOffline,
+          onDisableOffline: disableOffline,
+          offlineSubtitle: offlineSubtitle,
+          offlineIsAvailable: offlineIsAvailable,
+          askAI: askAI
+        )
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+    }
+    .overlay(alignment: .bottom) {
+      if showEdges, !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {
+        ReaderBottomPagerView(
+          currentIndex: viewModel.currentIndex,
+          totalPages: viewModel.pages.count,
+          onPrevious: viewModel.goToPreviousPage,
+          onNext: viewModel.goToNextPage
+        )
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+    }
+  }
+
+  @MainActor
+  private func applyReaderBrightnessIfPossible() {
+    let desired = CGFloat(min(1.0, max(0.0, preferences.brightness)))
+    let screen = activeScreen ?? UIScreen.main
+
+    if originalSystemBrightness == nil {
+      originalSystemBrightness = screen.brightness
+    }
+
+    let original = originalSystemBrightness ?? screen.brightness
+    // Only raise system brightness when needed (never lower the user's system setting).
+    let targetSystem = max(original, desired)
+    if abs(screen.brightness - targetSystem) > 0.005 {
+      screen.brightness = targetSystem
+    }
+  }
+
+  @MainActor
+  private func restoreSystemBrightnessIfNeeded() {
+    guard let originalSystemBrightness else { return }
+    let screen = activeScreen ?? UIScreen.main
+    if abs(screen.brightness - originalSystemBrightness) > 0.005 {
+      screen.brightness = originalSystemBrightness
+    }
+    self.originalSystemBrightness = nil
   }
 
   @MainActor
@@ -523,9 +675,6 @@ struct ReaderView: View {
       documentHighlights.removeAll { $0.id == h.id }
     } catch {
       // Non-blocking; keep existing list if delete fails.
-      #if DEBUG
-        print("[ReaderView] Failed to delete highlight: \(error)")
-      #endif
     }
   }
 
@@ -587,29 +736,11 @@ struct ReaderView: View {
     let windows = scenes.flatMap(\.windows)
     let keyWindow = windows.first(where: \.isKeyWindow)
 
-    #if DEBUG
-      let readerTheme = preferences.theme
-      let appTheme = AppTheme(rawValue: appThemeRawValue) ?? .dark
-      print(
-        "[ReaderView] applyReaderStatusBarStyle docID=\(book.remoteID ?? "nil") scheme=\(String(describing: scheme)) uiStyle=\(uiStyle.rawValue) readerTheme=\(readerTheme) appTheme=\(appTheme) windowsCount=\(windows.count) keyWindow=\(keyWindow != nil)"
-      )
-    #endif
-
     guard let window = keyWindow ?? windows.first else {
-      #if DEBUG
-        print(
-          "[ReaderView] applyReaderStatusBarStyle docID=\(book.remoteID ?? "nil") FAILED: no window"
-        )
-      #endif
       return
     }
     window.overrideUserInterfaceStyle = uiStyle
     window.rootViewController?.overrideUserInterfaceStyle = uiStyle
-    #if DEBUG
-      print(
-        "[ReaderView] applyReaderStatusBarStyle docID=\(book.remoteID ?? "nil") SET window+rootVC.overrideUserInterfaceStyle=\(uiStyle.rawValue)"
-      )
-    #endif
   }
 
   /// Status bar style while in reader: follows *reader* theme (day → light bar, night/amber → dark bar).
@@ -621,7 +752,16 @@ struct ReaderView: View {
     preferences.continuousScrollForShortDocs
       && !viewModel.isLoading
       && viewModel.pages.count > 0
-      && viewModel.pages.count < shortDocContinuousScrollMaxPages
+      && viewModel.pages.count < ReaderLimits.continuousScrollMaxPages
+  }
+
+  private func clamp(_ value: Double, min: Double, max: Double) -> Double {
+    Swift.min(max, Swift.max(min, value))
+  }
+
+  private func quantize(_ value: Double, step: Double) -> Double {
+    guard step > 0 else { return value }
+    return (value / step).rounded() * step
   }
 
   private func handleBack() {
@@ -669,15 +809,15 @@ struct ReaderView: View {
     OfflinePinStore.setPinned(remoteID: id, pinned: true)
     offlineEnabled = true
     offlineLastAutoDownloadAt = nil
+    let alreadyDownloaded = OptimizedPagesStore.hasLocalCopy(remoteID: id)
+    offlineIsAvailableState = alreadyDownloaded
 
-    withAnimation(.spring(response: 0.30, dampingFraction: 0.85)) {
-      settings.isPresented = false
-    }
-
-    if networkMonitor.isOnline, networkMonitor.isOnWiFi {
-      Task { @MainActor in
-        await downloadAndSaveOffline(remoteID: id)
-      }
+    // Only download when we don't already have a local copy.
+    if !alreadyDownloaded, networkMonitor.isOnline, networkMonitor.isOnWiFi {
+      startOfflineDownload(remoteID: id)
+    } else {
+      // Make sure we don't show a stale "Downloading…" toast when the file is already offline.
+      cancelOfflineDownload()
     }
 
     startOfflineMonitor(remoteID: id)
@@ -687,22 +827,48 @@ struct ReaderView: View {
     guard let id = book.remoteID, !id.isEmpty else { return }
     OfflinePinStore.setPinned(remoteID: id, pinned: false)
     offlineEnabled = false
+    cancelOfflineDownload()
     OptimizedPagesStore.delete(remoteID: id)
+    offlineAvailabilityToken &+= 1
+    offlineIsAvailableState = false
     refreshOfflineSubtitle(remoteID: id)
     stopOfflineMonitor()
   }
 
-  @MainActor private func downloadAndSaveOffline(remoteID: String) async {
+  @MainActor private func startOfflineDownload(remoteID: String) {
+    cancelOfflineDownload()
+    offlineDownloadGeneration &+= 1
+    let gen = offlineDownloadGeneration
+    offlineDownloadTask = Task { @MainActor in
+      await downloadAndSaveOffline(remoteID: remoteID, generation: gen)
+    }
+  }
+
+  @MainActor private func cancelOfflineDownload() {
+    // Invalidate any in-flight async work *before* it can touch UI state.
+    offlineDownloadGeneration &+= 1
+    offlineDownloadTask?.cancel()
+    offlineDownloadTask = nil
+    // Ensure the UI doesn't keep showing the "Downloading…" toast after turning offline off.
+    isOfflineSaving = false
+    offlineSaveMessage = nil
+  }
+
+  @MainActor private func downloadAndSaveOffline(remoteID: String, generation: Int) async {
+    guard generation == offlineDownloadGeneration else { return }
+    guard !Task.isCancelled else { return }
+    guard OfflinePinStore.isPinned(remoteID: remoteID) else { return }
     guard !isOfflineSaving else { return }
     isOfflineSaving = true
     offlineSaveMessage = "Downloading…"
     refreshOfflineSubtitle(remoteID: remoteID)
     print("[OfflineDownload] start id=\(remoteID)")
+    var didSaveLocalCopy: Bool = false
     defer {
       isOfflineSaving = false
       offlineSaveMessage = nil
       refreshOfflineSubtitle(remoteID: remoteID)
-      print("[OfflineDownload] end id=\(remoteID)")
+      print("[OfflineDownload] end id=\(remoteID) saved=\(didSaveLocalCopy)")
     }
 
     do {
@@ -711,8 +877,13 @@ struct ReaderView: View {
       var waited: Int = 0
 
       while waited <= maxWaitSeconds {
+        guard generation == offlineDownloadGeneration else { return }
+        if Task.isCancelled { return }
+        guard OfflinePinStore.isPinned(remoteID: remoteID) else { return }
+
         print("[OfflineDownload] poll t=\(waited)s id=\(remoteID)")
         let opt = try await documentsService.getOptimizedDocument(id: remoteID)
+        guard generation == offlineDownloadGeneration else { return }
         offlineMeta = opt
 
         let total = opt.pages?.count ?? 0
@@ -734,13 +905,23 @@ struct ReaderView: View {
         )
 
         if let pages = opt.pages, !pages.isEmpty {
-          try? OptimizedPagesStore.savePages(
-            remoteID: remoteID,
-            pages: pages,
-            optimizedVersion: opt.optimizedVersion,
-            optimizedChecksumSHA256: opt.optimizedChecksumSHA256
-          )
-          if opt.processingStatus == "ready" {
+          do {
+            try OptimizedPagesStore.savePages(
+              remoteID: remoteID,
+              pages: pages,
+              optimizedVersion: opt.optimizedVersion,
+              optimizedChecksumSHA256: opt.optimizedChecksumSHA256
+            )
+            offlineAvailabilityToken &+= 1
+            offlineIsAvailableState = true
+            didSaveLocalCopy = true
+          } catch {
+            // Keep polling; saving locally is best-effort.
+          }
+          // Only finish the flow when we actually saved a local copy.
+          if opt.processingStatus == "ready",
+            didSaveLocalCopy || OptimizedPagesStore.hasLocalCopy(remoteID: remoteID)
+          {
             print("[OfflineDownload] done status=ready id=\(remoteID)")
             return
           }
@@ -765,14 +946,14 @@ struct ReaderView: View {
   }
 
   private var offlineIsAvailable: Bool {
-    guard let id = book.remoteID, !id.isEmpty else { return false }
-    return OptimizedPagesStore.hasLocalCopy(remoteID: id)
+    _ = offlineAvailabilityToken
+    return offlineIsAvailableState
   }
 
   @MainActor private func attemptAutoDownloadIfNeeded(remoteID: String) {
     guard OfflinePinStore.isPinned(remoteID: remoteID) else { return }
-    guard OptimizedPagesStore.loadManifest(remoteID: remoteID) == nil else { return }
-    guard offlineIsAvailable else { return }
+    guard networkMonitor.isOnline, networkMonitor.isOnWiFi else { return }
+    guard !OptimizedPagesStore.hasLocalCopy(remoteID: remoteID) else { return }
     guard !isOfflineSaving else { return }
 
     let now = Date()
@@ -781,9 +962,7 @@ struct ReaderView: View {
     }
     offlineLastAutoDownloadAt = now
 
-    Task { @MainActor in
-      await downloadAndSaveOffline(remoteID: remoteID)
-    }
+    startOfflineDownload(remoteID: remoteID)
   }
 
   @MainActor private func refreshOfflineSubtitle(remoteID: String) {
@@ -839,19 +1018,17 @@ struct ReaderView: View {
         guard offlineEnabled else { return }
         guard OfflinePinStore.isPinned(remoteID: remoteID) else { return }
 
-        if OptimizedPagesStore.loadManifest(remoteID: remoteID) != nil {
+        if OptimizedPagesStore.hasLocalCopy(remoteID: remoteID) {
           isOfflineSaving = false
           offlineSaveMessage = nil
           refreshOfflineSubtitle(remoteID: remoteID)
+          offlineAvailabilityToken &+= 1
+          offlineIsAvailableState = true
           return
         }
 
         if let meta = try? await documentsService.getOptimizedDocument(id: remoteID) {
           offlineMeta = meta
-          if meta.processingStatus == "ready" {
-            isOfflineSaving = false
-            offlineSaveMessage = nil
-          }
           refreshOfflineSubtitle(remoteID: remoteID)
         }
 
@@ -1019,5 +1196,41 @@ struct ReaderView: View {
     guard total > 1 else { return nil }
     let idx = min(max(0, startPage - 1), total - 1)
     return Double(idx) / Double(total - 1)
+  }
+}
+
+/// Tiny view used to resolve the `UIScreen` the reader is actually displayed on.
+/// Avoids `UIScreen.main` where possible (multi-window / external display).
+private struct ReaderScreenAccessor: UIViewRepresentable {
+  let onResolve: (UIScreen) -> Void
+
+  func makeUIView(context: Context) -> ReaderScreenAccessorView {
+    let v = ReaderScreenAccessorView()
+    v.onResolve = onResolve
+    return v
+  }
+
+  func updateUIView(_ uiView: ReaderScreenAccessorView, context: Context) {
+    uiView.onResolve = onResolve
+    uiView.resolveIfPossible()
+  }
+}
+
+private final class ReaderScreenAccessorView: UIView {
+  var onResolve: ((UIScreen) -> Void)?
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    resolveIfPossible()
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    resolveIfPossible()
+  }
+
+  func resolveIfPossible() {
+    guard let screen = window?.windowScene?.screen ?? window?.screen else { return }
+    onResolve?(screen)
   }
 }

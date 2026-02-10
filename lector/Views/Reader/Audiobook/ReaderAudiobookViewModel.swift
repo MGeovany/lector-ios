@@ -40,6 +40,31 @@ final class ReaderAudiobookViewModel: NSObject, ObservableObject {
     synth.delegate = self
   }
 
+  private func configureAudioSessionForSpokenAudioIfPossible() {
+    let session = AVAudioSession.sharedInstance()
+    do {
+      // Use playback+spokenAudio so TTS works even when the device is muted
+      // and behaves correctly with other audio sources.
+      try session.setCategory(
+        .playback,
+        mode: .spokenAudio,
+        options: [.duckOthers, .allowBluetooth, .allowBluetoothA2DP]
+      )
+      try session.setActive(true, options: [])
+    } catch {
+      // Best-effort: if this fails, AVSpeechSynthesizer may still speak depending on system state.
+    }
+  }
+
+  private func deactivateAudioSessionIfPossible() {
+    let session = AVAudioSession.sharedInstance()
+    do {
+      try session.setActive(false, options: [.notifyOthersOnDeactivation])
+    } catch {
+      // Best-effort.
+    }
+  }
+
   func setOnRequestPageIndexChange(_ handler: @escaping (Int) -> Void) {
     onRequestPageIndexChange = handler
   }
@@ -60,6 +85,8 @@ final class ReaderAudiobookViewModel: NSObject, ObservableObject {
     pageProgress = 0
     currentPageIndex = pageIndex
 
+    configureAudioSessionForSpokenAudioIfPossible()
+
     if pages.isEmpty {
       pendingStart = true
       setPhase(.converting)
@@ -71,6 +98,7 @@ final class ReaderAudiobookViewModel: NSObject, ObservableObject {
   func disable() {
     pendingStart = false
     stopSynthesizerImmediately()
+    deactivateAudioSessionIfPossible()
     cursor = 0
     utteranceStartCursor = 0
     pageProgress = 0
@@ -202,6 +230,8 @@ final class ReaderAudiobookViewModel: NSObject, ObservableObject {
       setPhase(.paused)
       return
     }
+
+    configureAudioSessionForSpokenAudioIfPossible()
 
     let full = pages[pageIndex]
     let safeCursor = min(max(0, cursor), max(0, full.count - 1))
