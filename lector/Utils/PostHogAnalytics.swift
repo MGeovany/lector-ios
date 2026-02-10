@@ -33,4 +33,9 @@ enum PostHogAnalytics {
   static func identify(userId: String, traits: [String: Any] = [:]) {
     PostHogSDK.shared.identify(userId, userProperties: traits)
   }
+
+  /// Clear identity and anonymous ID so post–sign-out events are not attributed to the previous user.
+  static func reset() {
+    PostHogSDK.shared.reset()
+  }
 }

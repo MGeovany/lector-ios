@@ -268,6 +268,7 @@ final class AppSession {
   }
 
   func signOut() {
+    PostHogAnalytics.reset()
     KeychainStore.delete(account: KeychainKeys.authToken)
     KeychainStore.delete(account: KeychainKeys.refreshToken)
     KeychainStore.delete(account: KeychainKeys.userID)
