@@ -30,13 +30,30 @@ enum ReaderLimits {
 }
 
 enum APIConfig {
-  /// Use Info.plist API_BASE_URL (set via Xcode build settings). Debug → dev server; Release → production.
+  /// Use Info.plist API_BASE_URL when set. Otherwise: local/TestFlight → dev backend; App Store / main → production.
   static var baseURL: URL {
     let value =
       (Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String)?.trimmingCharacters(
         in: .whitespacesAndNewlines)
-    let fallback = "https://reader-go-dev-383281059490.us-central1.run.app/api/v1"
+    let fallback = useDevBackendByDefault
+      ? "https://reader-go-dev-383281059490.us-central1.run.app/api/v1"
+      : "https://reader-go-383281059490.us-central1.run.app/api/v1"
     return normalizeHTTPURL(value?.isEmpty == false ? value! : fallback, fallback: fallback)
+  }
+
+  /// True when the app should use the dev backend: local (DEBUG) or TestFlight (sandbox receipt).
+  private static var useDevBackendByDefault: Bool {
+    #if DEBUG
+    return true
+    #else
+    return hasSandboxReceipt
+    #endif
+  }
+
+  /// TestFlight (and dev installs) use a sandbox receipt; App Store uses production receipt.
+  private static var hasSandboxReceipt: Bool {
+    guard let url = Bundle.main.appStoreReceiptURL else { return false }
+    return url.lastPathComponent == "sandboxReceipt" || url.path.contains("sandboxReceipt")
   }
 
   /// Prefer Info.plist configuration (set via Xcode build settings). Falls back to a known test user.
