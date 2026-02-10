@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		961F8AE62F1941E900AA0ADA /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 96D0B6B9A1C2D3E4F5A6B7C8 /* Sentry */; };
 		9661505F2F1EA3BD003D1AB2 /* Lector.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 9661505E2F1EA3BD003D1AB2 /* Lector.storekit */; };
 /* End PBXBuildFile section */
 
@@ -43,7 +42,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				961F8AE62F1941E900AA0ADA /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,7 +94,6 @@
 			);
 			name = lector;
 			packageProductDependencies = (
-				96D0B6B9A1C2D3E4F5A6B7C8 /* Sentry */,
 			);
 			productName = lector;
 			productReference = 969C9A482F0C1A6E00EA0DB2 /* lector.app */;
@@ -128,7 +125,6 @@
 			mainGroup = 969C9A3F2F0C1A6E00EA0DB2;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				96D0B6B9A1C2D3E4F5A6B7C9 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 969C9A492F0C1A6E00EA0DB2 /* Products */;
@@ -307,7 +303,6 @@
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save highlight images to your Photos library.";
 				INFOPLIST_KEY_PRO_MONTHLY_PRODUCT_ID = lector.pro.monthly;
 				INFOPLIST_KEY_PRO_YEARLY_PRODUCT_ID = lector.pro.yearly;
-				INFOPLIST_KEY_SENTRY_DSN = "$(SENTRY_DSN)";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -351,7 +346,6 @@
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save highlight images to your Photos library.";
 				INFOPLIST_KEY_PRO_MONTHLY_PRODUCT_ID = lector.pro.monthly;
 				INFOPLIST_KEY_PRO_YEARLY_PRODUCT_ID = lector.pro.yearly;
-				INFOPLIST_KEY_SENTRY_DSN = "$(SENTRY_DSN)";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -396,25 +390,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		96D0B6B9A1C2D3E4F5A6B7C9 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 8.40.1;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		96D0B6B9A1C2D3E4F5A6B7C8 /* Sentry */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 96D0B6B9A1C2D3E4F5A6B7C9 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
-			productName = Sentry;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 969C9A402F0C1A6E00EA0DB2 /* Project object */;
 }
