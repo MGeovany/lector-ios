@@ -40,6 +40,7 @@ struct PremiumUpsellSheetView: View {
     }
     .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
+    .presentationBackground(Color(.systemGroupedBackground))
     .onAppear {
       // Default selection follows current subscription.
       selectedPlan = subscription.plan
