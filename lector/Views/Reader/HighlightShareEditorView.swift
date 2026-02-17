@@ -548,12 +548,12 @@ private struct HighlightCardView: View {
         VStack(alignment: .leading, spacing: 12) {
           if quote.isEmpty {
             Text("No text selected")
-              .font(font.font(size: quoteFontSize).weight(.bold))
+              .font(font.font(size: quoteFontSize, weight: .bold))
               .foregroundStyle(secondary)
               .italic()
           } else {
             Text(truncatedQuote)
-              .font(font.font(size: quoteFontSize).weight(.bold))
+              .font(font.font(size: quoteFontSize, weight: .bold))
               .foregroundStyle(primary)
               .lineSpacing(CGFloat(fontSize * (lineSpacing - 1)))
               .lineLimit(maxQuoteLines)
@@ -563,20 +563,20 @@ private struct HighlightCardView: View {
           VStack(alignment: .leading, spacing: 2) {
             if !author.isEmpty {
               Text(author)
-                .font(font.font(size: metadataFontSize).weight(.bold))
+                .font(font.font(size: metadataFontSize, weight: .bold))
                 .foregroundStyle(primary)
                 .lineLimit(1)
                 .padding(.top, 8)
             } else {
               Text("Unknown author")
-                .font(font.font(size: metadataFontSize).weight(.bold))
+                .font(font.font(size: metadataFontSize, weight: .bold))
                 .foregroundStyle(primary)
                 .lineLimit(1)
                 .padding(.top, 8)
             }
             if !title.isEmpty {
               Text(title)
-                .font(font.font(size: metadataFontSize).weight(.regular))
+                .font(font.font(size: metadataFontSize, weight: .regular))
                 .foregroundStyle(secondary)
                 .lineLimit(1)
             }
