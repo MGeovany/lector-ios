@@ -7,6 +7,10 @@ final class ReaderViewModel: ObservableObject {
   @Published var currentIndex: Int = 0
   @Published private(set) var isLoading: Bool = false
   @Published var loadErrorMessage: String?
+
+  /// Key used in loadErrorMessage when the app is offline and the book has no local copy.
+  static let offlineNotAvailableErrorKey = "OFFLINE_NOT_AVAILABLE"
+
   private let emptyRemoteMessage = "No content to display."
 
   private let debugLoggingEnabled: Bool = false
@@ -262,6 +266,15 @@ final class ReaderViewModel: ObservableObject {
         setPages(
           [
             "This document couldn't be found on the server. It may have been deleted or you may need to refresh your library."
+          ],
+          initialPage: 1
+        )
+      } else if !isDownloaded {
+        // App is offline (or can't connect) and this book isn't available offline.
+        loadErrorMessage = Self.offlineNotAvailableErrorKey
+        setPages(
+          [
+            "This book isn't available for offline reading. You can download your books from the library: open a book and turn on Offline in settings when you're connected."
           ],
           initialPage: 1
         )

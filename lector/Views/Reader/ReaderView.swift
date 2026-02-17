@@ -36,6 +36,7 @@ struct ReaderView: View {
   @State private var audiobookEnabled: Bool = false
   @State private var audiobookScrollToIndex: Int? = nil
   @State private var audiobookScrollToToken: Int = 0
+  @State private var scrollToPageAnchor: UnitPoint = .top
 
   @State private var offlineEnabled: Bool = false
   @State private var isOfflineSaving: Bool = false
@@ -435,7 +436,8 @@ struct ReaderView: View {
         onProgressChange?(page, total, nil)
       },
       scrollToPageIndex: $audiobookScrollToIndex,
-      scrollToPageToken: $audiobookScrollToToken
+      scrollToPageToken: $audiobookScrollToToken,
+      scrollToPageAnchor: scrollToPageAnchor
     )
     .contentShape(Rectangle())
     .simultaneousGesture(
@@ -695,7 +697,14 @@ struct ReaderView: View {
 
     viewModel.currentIndex = idx
     if shouldUseContinuousScroll {
-      requestScrollToPage(idx)
+      // When highlight is near the end of the document, scroll with anchor .bottom
+      // so the exact position of the highlight is visible (not cut off above the viewport).
+      let isNearEnd: Bool = {
+        if let pr = h.progress, pr >= 0.7 { return true }
+        if total > 0, Double(idx) >= Double(total - 1) * 0.75 { return true }
+        return false
+      }()
+      requestScrollToPage(idx, anchor: isNearEnd ? .bottom : .top)
     }
     // Clear any text selection overlay state.
     highlight.clearSelectionToken &+= 1
@@ -1045,7 +1054,8 @@ struct ReaderView: View {
     offlineMonitorTask = nil
   }
 
-  private func requestScrollToPage(_ idx: Int) {
+  private func requestScrollToPage(_ idx: Int, anchor: UnitPoint = .top) {
+    scrollToPageAnchor = anchor
     audiobookScrollToIndex = idx
     audiobookScrollToToken &+= 1
   }
