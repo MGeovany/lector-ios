@@ -34,6 +34,8 @@ struct ReaderContentScrollView: View {
 
   @Binding var scrollToPageIndex: Int?
   @Binding var scrollToPageToken: Int
+  /// Anchor for scroll-to-page (e.g. .bottom so highlight at end of page is visible).
+  var scrollToPageAnchor: UnitPoint = .top
 
   private let topAnchorID: String = "readerTop"
   private let scrollSpaceName: String = "readerScrollSpace"
@@ -194,7 +196,7 @@ struct ReaderContentScrollView: View {
         guard let idx = scrollToPageIndex else { return }
         guard viewModel.pages.indices.contains(idx) else { return }
         withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
-          proxy.scrollTo("page-\(idx)", anchor: .top)
+          proxy.scrollTo("page-\(idx)", anchor: scrollToPageAnchor)
         }
       }
     }
