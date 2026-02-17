@@ -535,6 +535,16 @@ struct ReaderView: View {
         }
       }
     }
+    .onChange(of: search.query) { _, newQuery in
+      let q = newQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !q.isEmpty, !viewModel.pages.isEmpty else { return }
+      if let idx = viewModel.pages.firstIndex(where: { $0.localizedCaseInsensitiveContains(q) }) {
+        viewModel.currentIndex = idx
+        if shouldUseContinuousScroll {
+          requestScrollToPage(idx, anchor: .top)
+        }
+      }
+    }
     .padding(.top, surfaceTopPadding)
     .padding(.bottom, surfaceBottomPadding)
     .background {
