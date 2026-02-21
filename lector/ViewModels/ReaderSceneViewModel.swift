@@ -47,7 +47,7 @@ final class ReaderSceneViewModel: ObservableObject {
   func goToHighlight(
     _ h: RemoteHighlight,
     continuousScroll: Bool,
-    onClearSelection: () -> Void
+    onClearSelection: @escaping () -> Void
   ) {
     let total = documentViewModel.pages.count
     guard total > 0 else { return }
@@ -62,29 +62,32 @@ final class ReaderSceneViewModel: ObservableObject {
       return min(max(0, documentViewModel.currentIndex), total - 1)
     }()
 
-    documentViewModel.currentIndex = idx
+    // Defer state updates to next runloop to avoid "Modifying state during view update".
+    Task { @MainActor in
+      documentViewModel.currentIndex = idx
 
-    if continuousScroll {
-      let isNearEnd: Bool = {
-        if let pr = h.progress, pr >= 0.7 { return true }
-        if total > 0, Double(idx) >= Double(total - 1) * 0.75 { return true }
-        return false
-      }()
-      let anchor: UnitPoint = isNearEnd ? .bottom : .top
-      if debugNavLogs {
-        print(
-          "[ReaderNav] goToHighlight id=\(h.id) totalPages=\(total) idx=\(idx) anchor=\(anchor == .bottom ? "bottom" : "top")"
-        )
+      if continuousScroll {
+        let isNearEnd: Bool = {
+          if let pr = h.progress, pr >= 0.7 { return true }
+          if total > 0, Double(idx) >= Double(total - 1) * 0.75 { return true }
+          return false
+        }()
+        let anchor: UnitPoint = isNearEnd ? .bottom : .top
+        if debugNavLogs {
+          print(
+            "[ReaderNav] goToHighlight id=\(h.id) totalPages=\(total) idx=\(idx) anchor=\(anchor == .bottom ? "bottom" : "top")"
+          )
+        }
+        requestScrollToPage(idx, anchor: anchor)
+      } else {
+        scrollToText = h.quote
+        scrollToTextToken &+= 1
+        if debugNavLogs {
+          print("[ReaderNav] goToHighlight (paged) id=\(h.id) idx=\(idx) scrollToText token=\(scrollToTextToken)")
+        }
       }
-      requestScrollToPage(idx, anchor: anchor)
-    } else {
-      scrollToText = h.quote
-      scrollToTextToken &+= 1
-      if debugNavLogs {
-        print("[ReaderNav] goToHighlight (paged) id=\(h.id) idx=\(idx) scrollToText token=\(scrollToTextToken)")
-      }
+      onClearSelection()
     }
-    onClearSelection()
   }
 
   func handleSearchQuery(
@@ -96,13 +99,15 @@ final class ReaderSceneViewModel: ObservableObject {
     guard let idx = documentViewModel.pages.firstIndex(where: { $0.localizedCaseInsensitiveContains(q) }) else {
       return false
     }
-    documentViewModel.currentIndex = idx
-    if continuousScroll {
-      requestScrollToPage(idx, anchor: .top)
-    } else {
-      scrollToText = q
-      scrollToTextToken &+= 1
-      if debugNavLogs { print("[ReaderNav] search (paged) scrollToText token=\(scrollToTextToken)") }
+    Task { @MainActor in
+      documentViewModel.currentIndex = idx
+      if continuousScroll {
+        requestScrollToPage(idx, anchor: .top)
+      } else {
+        scrollToText = q
+        scrollToTextToken &+= 1
+        if debugNavLogs { print("[ReaderNav] search (paged) scrollToText token=\(scrollToTextToken)") }
+      }
     }
     return true
   }

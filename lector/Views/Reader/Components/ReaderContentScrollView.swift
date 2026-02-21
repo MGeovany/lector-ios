@@ -183,14 +183,15 @@ struct ReaderContentScrollView: View {
       .onChange(of: viewModel.currentIndex, initial: true) { _, newValue in
         guard !shouldUseContinuousScroll else { return }
         onPagedProgressChange(newValue + 1, max(1, viewModel.pages.count))
-        withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+        // Defer to avoid fighting any pending in-page scroll requests.
+        DispatchQueue.main.async {
           proxy.scrollTo(topAnchorID, anchor: .top)
         }
       }
       .onChange(of: showSearch) { _, isVisible in
         guard isVisible else { return }
         // When opening search, jump to the top so the search bar is visible.
-        withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+        DispatchQueue.main.async {
           proxy.scrollTo(topAnchorID, anchor: .top)
         }
       }

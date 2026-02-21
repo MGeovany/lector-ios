@@ -277,19 +277,45 @@ final class Coordinator {
 
 // MARK: - Gesture coordination helpers
 extension UIView {
-  fileprivate func lectorNearestAncestorScrollView(excludingSelf: Bool = true) -> UIScrollView? {
+  fileprivate func lectorAncestorScrollViews(excludingSelf: Bool = true) -> [UIScrollView] {
+    var out: [UIScrollView] = []
     var v: UIView? = excludingSelf ? self.superview : self
     while let current = v {
-      if let sv = current as? UIScrollView { return sv }
+      if let sv = current as? UIScrollView { out.append(sv) }
       v = current.superview
     }
-    return nil
+    return out
   }
 }
 
 extension UITextView {
+  fileprivate func lectorBestAncestorScrollViewForScrolling(debug: Bool) -> UIScrollView? {
+    let ancestors = lectorAncestorScrollViews(excludingSelf: true)
+    guard !ancestors.isEmpty else {
+      if debug { print("[ReaderNav] scrollToText: no ancestor UIScrollView") }
+      return nil
+    }
+
+    // Prefer a scroll view that can actually scroll vertically, and pick the one with the
+    // largest scrollable height to avoid grabbing an internal/auxiliary scroll view.
+    let candidates = ancestors.filter { sv in
+      sv.isScrollEnabled && (sv.contentSize.height > sv.bounds.height + 1)
+    }
+    let best = candidates.max { a, b in
+      (a.contentSize.height - a.bounds.height) < (b.contentSize.height - b.bounds.height)
+    } ?? candidates.last ?? ancestors.last
+
+    if debug, let best {
+      let cls = String(describing: type(of: best))
+      print(
+        "[ReaderNav] scrollToText parent=\(cls) contentSizeH=\(Int(best.contentSize.height)) boundsH=\(Int(best.bounds.height)) insetTop=\(Int(best.adjustedContentInset.top)) insetBottom=\(Int(best.adjustedContentInset.bottom))"
+      )
+    }
+    return best
+  }
+
   fileprivate func lectorPreferParentScrollViewForPans(debug: Bool) {
-    guard let parent = self.lectorNearestAncestorScrollView(excludingSelf: true) else {
+    guard let parent = lectorBestAncestorScrollViewForScrolling(debug: debug) else {
       if debug { print("[SelectableTextView] no parent UIScrollView ancestor found") }
       return
     }
@@ -309,10 +335,7 @@ extension UITextView {
     animated: Bool,
     debug: Bool
   ) {
-    guard let parent = self.lectorNearestAncestorScrollView(excludingSelf: true) else {
-      if debug { print("[ReaderNav] scrollToText: no parent scroll view") }
-      return
-    }
+    guard let parent = lectorBestAncestorScrollViewForScrolling(debug: debug) else { return }
     guard range.location != NSNotFound, range.length > 0 else { return }
 
     // Ensure layout is ready.
@@ -321,25 +344,38 @@ extension UITextView {
     var rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
     rect = rect.insetBy(dx: -8, dy: -24)
 
-    // Convert rect to scroll view's current bounds; then get content Y of rect top.
-    let rectInScrollView = parent.convert(rect, from: self)
-    let contentYOfRectTop = rectInScrollView.minY + parent.contentOffset.y
-    let topPadding: CGFloat = 24
-    let targetContentOffsetY = contentYOfRectTop - topPadding
-
-    let topInset = parent.adjustedContentInset.top
-    let bottomInset = parent.adjustedContentInset.bottom
-    let minY = -topInset
-    let maxY = max(minY, parent.contentSize.height - parent.bounds.height + bottomInset)
-    let clamped = min(maxY, max(minY, targetContentOffsetY))
+    // Convert the rect to the parent scroll view's coordinate space and let UIKit handle scrolling.
+    var rectInParent = parent.convert(rect, from: self)
+    let topPadding: CGFloat = 28
+    rectInParent.origin.y = rectInParent.origin.y - topPadding
+    rectInParent.size.height = rectInParent.size.height + (topPadding * 2)
 
     if debug {
       print(
-        "[ReaderNav] scrollToText range=\(range.location),\(range.length) contentYOfRectTop=\(Int(contentYOfRectTop)) targetOffset=\(Int(clamped)) contentH=\(Int(parent.contentSize.height))"
+        "[ReaderNav] scrollToText range=\(range.location),\(range.length) rectY=\(Int(rectInParent.minY)) rectH=\(Int(rectInParent.height)) contentOffsetY=\(Int(parent.contentOffset.y)) contentH=\(Int(parent.contentSize.height))"
       )
     }
 
-    parent.setContentOffset(CGPoint(x: parent.contentOffset.x, y: clamped), animated: animated)
+    parent.scrollRectToVisible(rectInParent, animated: animated)
+
+    // Retry once after animations/layout settle (helps when SwiftUI also scrolls to top on page change).
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self, weak parent] in
+      guard let self, let parent else { return }
+      self.layoutManager.ensureLayout(for: self.textContainer)
+      let glyphRange = self.layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+      var rect = self.layoutManager.boundingRect(forGlyphRange: glyphRange, in: self.textContainer)
+      rect = rect.insetBy(dx: -8, dy: -24)
+      var rectInParent = parent.convert(rect, from: self)
+      rectInParent.origin.y -= topPadding
+      rectInParent.size.height += (topPadding * 2)
+      let isVisible = parent.bounds.intersects(rectInParent)
+      if debug {
+        print("[ReaderNav] scrollToText retry visible=\(isVisible) offsetY=\(Int(parent.contentOffset.y)) rectY=\(Int(rectInParent.minY))")
+      }
+      if !isVisible {
+        parent.scrollRectToVisible(rectInParent, animated: false)
+      }
+    }
   }
 }
 
