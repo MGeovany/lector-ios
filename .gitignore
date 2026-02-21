@@ -9,6 +9,7 @@ lector.code-workspace
 
 # Secrets (API keys, etc.) — do not commit
 Secrets.xcconfig
+Secrets.xcconfig.example
 
 # Xcode
 xcuserdata/
