@@ -92,12 +92,16 @@ class ReaderAskAIViewModel: ObservableObject {
         let modelMsg = ReaderChatMessage(
           role: .assistant, text: response.message, citations: response.citations)
         self.messages.append(modelMsg)
+        PostHogAnalytics.capture("ask_ai_used", properties: ["document_id": documentID])
       } catch {
         self.errorMessage = error.localizedDescription
         self.messages.append(
           ReaderChatMessage(
             role: .assistant, text: "Error: \(error.localizedDescription)", citations: nil))
-
+        PostHogAnalytics.captureError(
+          message: error.localizedDescription,
+          context: ["action": "ask_ai", "document_id": documentID]
+        )
         if error.localizedDescription.localizedCaseInsensitiveContains("no content") {
           self.showIngestButton = true
         }

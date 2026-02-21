@@ -1,3 +1,4 @@
+import PostHog
 import UIKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
@@ -5,6 +6,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    if PostHogAppConfig.isEnabled {
+      let config = PostHogConfig(apiKey: PostHogAppConfig.apiKey, host: PostHogAppConfig.host)
+      config.sessionReplay = true
+      config.sessionReplayConfig.maskAllTextInputs = false
+      config.sessionReplayConfig.screenshotMode = true
+      config.flushAt = 1
+      PostHogSDK.shared.setup(config)
+      PostHogSDK.shared.capture("app_launched", properties: ["platform": "ios"])
+      PostHogSDK.shared.flush()
+    }
     return true
   }
 

@@ -35,6 +35,14 @@ struct HomeView: View {
     @Bindable var viewModel = viewModel
     homeNavigationStack(viewModel: viewModel, selectedBook: $viewModel.selectedBook)
       .onAppear { networkMonitor.startIfNeeded() }
+      .onChange(of: viewModel.selectedBook) { _, newValue in
+        if let book = newValue {
+          PostHogAnalytics.capture(
+            "document_opened",
+            properties: ["document_id": book.remoteID ?? "", "title": book.title]
+          )
+        }
+      }
       .fileImporter(
         isPresented: $showFilePicker,
         allowedContentTypes: Self.allowedImportTypes,
@@ -47,7 +55,10 @@ struct HomeView: View {
           }
         case .failure(let error):
           let message = error.localizedDescription
-          Task { @MainActor in viewModel.alertMessage = message }
+          Task { @MainActor in
+            viewModel.alertMessage = message
+            PostHogAnalytics.captureError(message: message, context: ["action": "file_import"])
+          }
         }
       }
       .overlay(alignment: .top) {

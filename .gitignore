@@ -7,9 +7,8 @@ lector.code-workspace
 .swiftpm/
 /Package.resolved
 
-# Secrets (API keys, etc.) — do not commit
+# Secrets 
 Secrets.xcconfig
-Secrets.xcconfig.example
 
 # Xcode
 xcuserdata/
