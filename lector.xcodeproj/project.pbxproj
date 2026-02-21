@@ -349,7 +349,7 @@
 				DEVELOPMENT_TEAM = F5AC2P3U57;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = lector/Info.plist;
+				INFOPLIST_FILE = lector/Info-Release.plist;
 				INFOPLIST_KEY_API_BASE_URL = "$(API_BASE_URL)";
 				INFOPLIST_KEY_CFBundleDisplayName = "Lector: Clean Reading";
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLName = \"$(PRODUCT_BUNDLE_IDENTIFIER)\";\n    CFBundleURLSchemes =     (\n        lector\n    );\n}";
