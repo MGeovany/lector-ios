@@ -54,42 +54,29 @@ final class SupabaseAuthService: NSObject, SupabaseAuthServicing {
   }
 
   func beginGoogleOAuth() -> (url: URL, pkceVerifier: String) {
-    print("🟠 [SupabaseAuthService] beginGoogleOAuth() called")
-    print("🟠 [SupabaseAuthService] Supabase URL: \(url.absoluteString)")
     let verifier = PKCE.codeVerifier()
     let challenge = PKCE.codeChallenge(from: verifier)
     let authURL = makeAuthorizeURL(codeChallenge: challenge)
-    print("🟠 [SupabaseAuthService] Generated auth URL: \(authURL.absoluteString)")
     return (authURL, verifier)
   }
 
   func completeOAuth(callbackURL: URL, pkceVerifier: String?) async throws -> SupabaseSession {
-    print("🟠 [SupabaseAuthService] completeOAuth() called")
-    print("🟠 [SupabaseAuthService] Callback URL: \(callbackURL.absoluteString)")
-    print("🟠 [SupabaseAuthService] Fragment params: \(callbackURL.fragmentParameters)")
-    print("🟠 [SupabaseAuthService] Query params: \(callbackURL.queryParameters)")
-
     // Implicit flow (#access_token)
     if let accessToken = callbackURL.fragmentParameters["access_token"], !accessToken.isEmpty {
-      print("🟠 [SupabaseAuthService] Found access_token in fragment (implicit flow)")
       let refresh = callbackURL.fragmentParameters["refresh_token"]
       return try Self.sessionFromTokens(accessToken: accessToken, refreshToken: refresh)
     }
 
     // PKCE code flow (?code=...)
     if let code = callbackURL.queryParameters["code"], !code.isEmpty {
-      print("🟠 [SupabaseAuthService] Found code in query (PKCE flow)")
       guard let pkceVerifier, !pkceVerifier.isEmpty else {
-        print("🔴 [SupabaseAuthService] Missing PKCE verifier")
         throw SupabaseAuthError.missingAuthCodeOrToken
       }
-      print("🟠 [SupabaseAuthService] Exchanging PKCE code for token")
       let token = try await exchangePKCECode(code: code, verifier: pkceVerifier)
       return try Self.sessionFromTokens(
         accessToken: token.accessToken, refreshToken: token.refreshToken)
     }
 
-    print("🔴 [SupabaseAuthService] No access_token or code found in callback URL")
     throw SupabaseAuthError.missingAuthCodeOrToken
   }
 
@@ -114,8 +101,6 @@ final class SupabaseAuthService: NSObject, SupabaseAuthServicing {
 
   private func makeAuthorizeURL(codeChallenge: String) -> URL {
     let baseURL = url.appendingPathComponent("auth/v1/authorize")
-    print("🟠 [SupabaseAuthService] Base authorize URL: \(baseURL.absoluteString)")
-    print("🟠 [SupabaseAuthService] Redirect URL: \(SupabaseConfig.redirectURL.absoluteString)")
     var components = URLComponents(
       url: baseURL, resolvingAgainstBaseURL: false)!
     components.queryItems = [

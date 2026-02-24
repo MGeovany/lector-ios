@@ -13,9 +13,12 @@ struct SelectableTextView: UIViewRepresentable {
   let highlightColor: UIColor
   let highlightOpacity: CGFloat
   let clearSelectionToken: Int
+  let scrollToText: String?
+  let scrollToTextToken: Int
   let onShareSelection: (String) -> Void
 
   private static let debugScrollLogs: Bool = false
+  private static let debugNavLogs: Bool = false
 
   func sizeThatFits(
     _ proposal: ProposedViewSize,
@@ -159,6 +162,29 @@ struct SelectableTextView: UIViewRepresentable {
     uiView.setNeedsLayout()
     uiView.layoutIfNeeded()
 
+    if context.coordinator.lastScrollToTextToken != scrollToTextToken {
+      context.coordinator.lastScrollToTextToken = scrollToTextToken
+      let t = (scrollToText ?? "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: "\n", with: " ")
+        .replacingOccurrences(of: "\r", with: " ")
+      if Self.debugNavLogs {
+        print("[ReaderNav] scrollToText token=\(scrollToTextToken) textLen=\(t.count)")
+      }
+      if !t.isEmpty {
+        let full = uiView.attributedText.string as NSString
+        let ranges = Self.rangesOfQuote(t, in: full)
+        if let r = ranges.first {
+          // Defer so layout (intrinsic size, scroll content size) is applied first.
+          DispatchQueue.main.async {
+            uiView.lectorScrollParentToMakeRangeVisible(r, animated: true, debug: Self.debugNavLogs)
+          }
+        } else if Self.debugNavLogs {
+          print("[ReaderNav] scrollToText: no range match on this page")
+        }
+      }
+    }
+
     if Self.debugScrollLogs {
       print(
         "[SelectableTextView] update bounds=\(uiView.bounds.size) attrLen=\(uiView.attributedText.length) scrollEnabled=\(uiView.isScrollEnabled)"
@@ -246,23 +272,50 @@ struct SelectableTextView: UIViewRepresentable {
 
 final class Coordinator {
   var lastClearSelectionToken: Int = 0
+  var lastScrollToTextToken: Int = 0
 }
 
 // MARK: - Gesture coordination helpers
 extension UIView {
-  fileprivate func lectorNearestAncestorScrollView(excludingSelf: Bool = true) -> UIScrollView? {
+  fileprivate func lectorAncestorScrollViews(excludingSelf: Bool = true) -> [UIScrollView] {
+    var out: [UIScrollView] = []
     var v: UIView? = excludingSelf ? self.superview : self
     while let current = v {
-      if let sv = current as? UIScrollView { return sv }
+      if let sv = current as? UIScrollView { out.append(sv) }
       v = current.superview
     }
-    return nil
+    return out
   }
 }
 
 extension UITextView {
+  fileprivate func lectorBestAncestorScrollViewForScrolling(debug: Bool) -> UIScrollView? {
+    let ancestors = lectorAncestorScrollViews(excludingSelf: true)
+    guard !ancestors.isEmpty else {
+      if debug { print("[ReaderNav] scrollToText: no ancestor UIScrollView") }
+      return nil
+    }
+
+    // Prefer a scroll view that can actually scroll vertically, and pick the one with the
+    // largest scrollable height to avoid grabbing an internal/auxiliary scroll view.
+    let candidates = ancestors.filter { sv in
+      sv.isScrollEnabled && (sv.contentSize.height > sv.bounds.height + 1)
+    }
+    let best = candidates.max { a, b in
+      (a.contentSize.height - a.bounds.height) < (b.contentSize.height - b.bounds.height)
+    } ?? candidates.last ?? ancestors.last
+
+    if debug, let best {
+      let cls = String(describing: type(of: best))
+      print(
+        "[ReaderNav] scrollToText parent=\(cls) contentSizeH=\(Int(best.contentSize.height)) boundsH=\(Int(best.bounds.height)) insetTop=\(Int(best.adjustedContentInset.top)) insetBottom=\(Int(best.adjustedContentInset.bottom))"
+      )
+    }
+    return best
+  }
+
   fileprivate func lectorPreferParentScrollViewForPans(debug: Bool) {
-    guard let parent = self.lectorNearestAncestorScrollView(excludingSelf: true) else {
+    guard let parent = lectorBestAncestorScrollViewForScrolling(debug: debug) else {
       if debug { print("[SelectableTextView] no parent UIScrollView ancestor found") }
       return
     }
@@ -276,10 +329,59 @@ extension UITextView {
       )
     }
   }
+
+  fileprivate func lectorScrollParentToMakeRangeVisible(
+    _ range: NSRange,
+    animated: Bool,
+    debug: Bool
+  ) {
+    guard let parent = lectorBestAncestorScrollViewForScrolling(debug: debug) else { return }
+    guard range.location != NSNotFound, range.length > 0 else { return }
+
+    // Ensure layout is ready.
+    layoutManager.ensureLayout(for: textContainer)
+    let glyphRange = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+    var rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+    rect = rect.insetBy(dx: -8, dy: -24)
+
+    // Convert the rect to the parent scroll view's coordinate space and let UIKit handle scrolling.
+    var rectInParent = parent.convert(rect, from: self)
+    let topPadding: CGFloat = 28
+    rectInParent.origin.y = rectInParent.origin.y - topPadding
+    rectInParent.size.height = rectInParent.size.height + (topPadding * 2)
+
+    if debug {
+      print(
+        "[ReaderNav] scrollToText range=\(range.location),\(range.length) rectY=\(Int(rectInParent.minY)) rectH=\(Int(rectInParent.height)) contentOffsetY=\(Int(parent.contentOffset.y)) contentH=\(Int(parent.contentSize.height))"
+      )
+    }
+
+    parent.scrollRectToVisible(rectInParent, animated: animated)
+
+    // Retry once after animations/layout settle (helps when SwiftUI also scrolls to top on page change).
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self, weak parent] in
+      guard let self, let parent else { return }
+      self.layoutManager.ensureLayout(for: self.textContainer)
+      let glyphRange = self.layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+      var rect = self.layoutManager.boundingRect(forGlyphRange: glyphRange, in: self.textContainer)
+      rect = rect.insetBy(dx: -8, dy: -24)
+      var rectInParent = parent.convert(rect, from: self)
+      rectInParent.origin.y -= topPadding
+      rectInParent.size.height += (topPadding * 2)
+      let isVisible = parent.bounds.intersects(rectInParent)
+      if debug {
+        print("[ReaderNav] scrollToText retry visible=\(isVisible) offsetY=\(Int(parent.contentOffset.y)) rectY=\(Int(rectInParent.minY))")
+      }
+      if !isVisible {
+        parent.scrollRectToVisible(rectInParent, animated: false)
+      }
+    }
+  }
 }
 
 final class ShareableSelectionTextView: UITextView {
   var onShareSelection: ((String) -> Void)?
+  private var lastMeasuredWidth: CGFloat = 0
 
   override var canBecomeFirstResponder: Bool { true }
 
@@ -294,7 +396,7 @@ final class ShareableSelectionTextView: UITextView {
     }
 
     let share = UIAction(
-      title: "Share highlight",
+      title: "Save highlight",
       image: UIImage(systemName: "square.and.arrow.up")
     ) { [weak self] _ in
       self?.onShareSelection?(selected)
@@ -321,13 +423,22 @@ final class ShareableSelectionTextView: UITextView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    if bounds.width > 0 {
+    // Avoid invalidating on every layout pass; it causes the iOS edit menu to
+    // constantly recompute its anchor while the user drags it, creating a jitter.
+    let w = bounds.width
+    guard w > 0 else { return }
+    if abs(w - lastMeasuredWidth) > 0.5 {
+      lastMeasuredWidth = w
       invalidateIntrinsicContentSize()
     }
   }
 
   override func buildMenu(with builder: UIMenuBuilder) {
     super.buildMenu(with: builder)
+
+    // iOS 16+ uses `editMenu(for:suggestedActions:)`. If we also inject here,
+    // the menu can rebuild during drag (glitchy jump up/down).
+    if #available(iOS 16.0, *) { return }
 
     guard selectedRange.length > 0 else { return }
     let selectedNow: String? = {
@@ -338,7 +449,7 @@ final class ShareableSelectionTextView: UITextView {
     guard let selectedNow else { return }
 
     let share = UIAction(
-      title: "Share highlight",
+      title: "Save highlight",
       image: UIImage(systemName: "square.and.arrow.up")
     ) { [weak self] _ in
       self?.onShareSelection?(selectedNow)

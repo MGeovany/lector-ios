@@ -82,3 +82,5 @@
 "Retrieving your profile" = "Retrieving your profile";
 "Close" = "Close";
 "This setting only affects the app UI. Document content is unchanged." = "This setting only affects the app UI. Document content is unchanged.";
+"ReaderConnectionError.offlineNotAvailable.title" = "Not available for offline reading";
+"ReaderConnectionError.offlineNotAvailable.detail" = "You can download your books from the library: open a book and turn on Offline in settings when you're connected.";

@@ -53,4 +53,5 @@ struct AppPreferenceKeys {
   static let profileAvatarHeadAssetName = "lector_profile_avatar_head_asset_name"
   static let profileAvatarFaceAssetName = "lector_profile_avatar_face_asset_name"
   static let profileAvatarAccessoryAssetName = "lector_profile_avatar_accessory_asset_name"
+  static let askAIPromoBannerDismissed = "lector_ask_ai_promo_banner_dismissed"
 }

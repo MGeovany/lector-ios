@@ -126,6 +126,7 @@ final class APIClient {
   private let session: URLSession
   private let tokenProvider: AuthTokenProviding
   private let authService: SupabaseAuthServicing
+  private static let defaultRequestTimeoutSeconds: TimeInterval = 35
 
   init(
     baseURL: URL = APIConfig.baseURL,
@@ -142,20 +143,24 @@ final class APIClient {
   private static let defaultSession: URLSession = {
     let config = URLSessionConfiguration.ephemeral
     config.waitsForConnectivity = false
-    config.timeoutIntervalForRequest = 35
+    config.timeoutIntervalForRequest = defaultRequestTimeoutSeconds
     // Leave timeoutIntervalForResource at default so large transfers (PDF upload, optimized doc download) can complete on slow networks. 35s tolerates Cloud Run cold start.
     return URLSession(configuration: config)
   }()
 
-  func get<T: Decodable>(_ path: String) async throws -> T {
-    var request = try makeRequest(path: path, method: "GET")
+  func get<T: Decodable>(_ path: String, timeoutInterval: TimeInterval? = nil) async throws -> T {
+    var request = try makeRequest(path: path, method: "GET", timeoutInterval: timeoutInterval)
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     return try await send(request, decode: T.self)
   }
 
-  func get<T: Decodable>(_ path: String, queryItems: [URLQueryItem]) async throws -> T {
+  func get<T: Decodable>(
+    _ path: String,
+    queryItems: [URLQueryItem],
+    timeoutInterval: TimeInterval? = nil
+  ) async throws -> T {
     let url = try makeURL(path: path, queryItems: queryItems)
-    var request = try makeRequest(url: url, method: "GET")
+    var request = try makeRequest(url: url, method: "GET", timeoutInterval: timeoutInterval)
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     return try await send(request, decode: T.self)
   }
@@ -215,13 +220,17 @@ final class APIClient {
 
   // MARK: - Internals
 
-  private func makeRequest(path: String, method: String) throws -> URLRequest {
+  private func makeRequest(path: String, method: String, timeoutInterval: TimeInterval? = nil) throws
+    -> URLRequest
+  {
     let url = baseURL.appendingPathComponent(
       path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
-    return try makeRequest(url: url, method: method)
+    return try makeRequest(url: url, method: method, timeoutInterval: timeoutInterval)
   }
 
-  private func makeRequest(url: URL, method: String) throws -> URLRequest {
+  private func makeRequest(url: URL, method: String, timeoutInterval: TimeInterval? = nil) throws
+    -> URLRequest
+  {
     guard let token = tokenProvider.bearerToken(), !token.isEmpty else {
       throw APIError.missingAuthToken
     }
@@ -229,7 +238,7 @@ final class APIClient {
     var request = URLRequest(url: url)
     request.httpMethod = method
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-    request.timeoutInterval = 35
+    request.timeoutInterval = timeoutInterval ?? APIClient.defaultRequestTimeoutSeconds
     return request
   }
 
@@ -260,7 +269,6 @@ final class APIClient {
       guard let http = response as? HTTPURLResponse else {
         throw APIError.invalidResponse
       }
-      let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
 
       if !(200...299).contains(http.statusCode) {
         // Attempt a single refresh+retry on auth failures.

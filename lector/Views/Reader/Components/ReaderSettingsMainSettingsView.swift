@@ -22,6 +22,8 @@ struct ReaderSettingsMainSettingsView: View {
   let offlineIsAvailable: Bool
 
   @State private var showPremiumSheet: Bool = false
+  @State private var premiumInitialPlan: SubscriptionPlan? = nil
+  @AppStorage(AppPreferenceKeys.askAIPromoBannerDismissed) private var askAIPromoBannerDismissed: Bool = false
   private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
   var body: some View {
@@ -35,86 +37,114 @@ struct ReaderSettingsMainSettingsView: View {
 
     let totalH: CGFloat = themeH + gap + searchH + gap + tallH
 
-    GeometryReader { geo in
-      let totalW = geo.size.width
-      let leftW = (totalW - gap) * 0.80
-      let rightW = (totalW - gap) * 0.20
+    let shouldShowAskAIPromo = !askAIPromoBannerDismissed && !subscription.isPremium
 
-      let themePillW = leftW * 0.93
-      let searchColW = leftW * 0.35
-      let textColW = leftW - gap - searchColW
-
-      HStack(alignment: .top, spacing: gap) {
-        VStack(spacing: gap) {
-          themePill
-            .frame(width: themePillW)
-            .frame(height: themeH)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-          HStack(alignment: .top, spacing: gap) {
-            VStack(spacing: gap) {
-              textTile
-                .frame(height: textH)
-
-              HStack(spacing: gap) {
-                offlineTile
-                  .frame(maxWidth: .infinity)
-                  .frame(height: bottomH)
-
-                lockTile
-                  .frame(maxWidth: .infinity)
-                  .frame(height: bottomH)
-              }
-            }
-            .frame(width: textColW)
-
-            VStack(spacing: gap) {
-              searchTile
-                .frame(height: searchH)
-
-              textSizePill
-                .frame(height: tallH)
-            }
-            .frame(width: searchColW)
+    return VStack(spacing: 12) {
+      if shouldShowAskAIPromo {
+        ReaderAskAIPromoBannerView(
+          theme: preferences.theme,
+          onTry: {
+            askAIPromoBannerDismissed = true
+            premiumInitialPlan = .proMonthly
+            showPremiumSheet = true
+          },
+          onDismiss: {
+            askAIPromoBannerDismissed = true
           }
-        }
-        .frame(width: leftW)
-
-        VStack(spacing: gap) {
-          voiceTile
-            .frame(height: themeH)
-
-          askAiTile
-            .frame(height: searchH)
-
-          brightnessPill
-            .frame(height: tallH)
-        }
-        .frame(width: rightW)
+        )
       }
+
+      GeometryReader { geo in
+        let totalW = geo.size.width
+        let leftW = (totalW - gap) * 0.80
+        let rightW = (totalW - gap) * 0.20
+
+        let themePillW = leftW * 0.93
+        let searchColW = leftW * 0.35
+        let textColW = leftW - gap - searchColW
+
+        HStack(alignment: .top, spacing: gap) {
+          VStack(spacing: gap) {
+            themePill
+              .frame(width: themePillW)
+              .frame(height: themeH)
+              .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(alignment: .top, spacing: gap) {
+              VStack(spacing: gap) {
+                textTile
+                  .frame(height: textH)
+
+                HStack(spacing: gap) {
+                  offlineTile
+                    .frame(maxWidth: .infinity)
+                    .frame(height: bottomH)
+
+                  lockTile
+                    .frame(maxWidth: .infinity)
+                    .frame(height: bottomH)
+                }
+              }
+              .frame(width: textColW)
+
+              VStack(spacing: gap) {
+                searchTile
+                  .frame(height: searchH)
+
+                textSizePill
+                  .frame(height: tallH)
+              }
+              .frame(width: searchColW)
+            }
+          }
+          .frame(width: leftW)
+
+          VStack(spacing: gap) {
+            voiceTile
+              .frame(height: themeH)
+
+            askAiTile
+              .frame(height: searchH)
+
+            brightnessPill
+              .frame(height: tallH)
+          }
+          .frame(width: rightW)
+        }
+      }
+      .frame(height: totalH)
     }
-    .frame(height: totalH)
     // On iPad, present full-screen so the subscription UI is bigger.
     .sheet(
       isPresented: Binding(
         get: { showPremiumSheet && !isPad },
         set: { newValue in
-          if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+          if !newValue {
+            showPremiumSheet = false
+            premiumInitialPlan = nil
+          } else {
+            showPremiumSheet = true
+          }
         }
       )
     ) {
-      PremiumUpsellSheetView()
+      PremiumUpsellSheetView(initialSelectedPlan: premiumInitialPlan)
         .environmentObject(subscription)
     }
     .fullScreenCover(
       isPresented: Binding(
         get: { showPremiumSheet && isPad },
         set: { newValue in
-          if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+          if !newValue {
+            showPremiumSheet = false
+            premiumInitialPlan = nil
+          } else {
+            showPremiumSheet = true
+          }
         }
       )
     ) {
-      PremiumUpsellSheetView()
+      PremiumUpsellSheetView(initialSelectedPlan: premiumInitialPlan)
         .environmentObject(subscription)
     }
   }
@@ -145,6 +175,7 @@ struct ReaderSettingsMainSettingsView: View {
       isSelected: audiobookEnabled,
       subtitle: nil,
       showsBadge: false,
+      badgeColor: .green,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
@@ -196,6 +227,7 @@ struct ReaderSettingsMainSettingsView: View {
             // localDragOffset = 0
             screen = .askAI
           } else {
+            premiumInitialPlan = .proMonthly
             showPremiumSheet = true
           }
         }
@@ -220,12 +252,18 @@ struct ReaderSettingsMainSettingsView: View {
   }
 
   private var offlineTile: some View {
-    ReaderSettingsRoundToggleTile(
+    let badge: Color = {
+      if offlineIsAvailable { return .green }
+      if offlineEnabled, offlineSubtitle != nil { return .yellow }
+      return Color.green.opacity(0.35)
+    }()
+    return ReaderSettingsRoundToggleTile(
       title: "Offline",
       systemImage: offlineEnabled ? "wifi.slash" : "wifi",
       isSelected: offlineEnabled,
       subtitle: offlineSubtitle,
-      showsBadge: offlineIsAvailable,
+      showsBadge: offlineEnabled,
+      badgeColor: badge,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
@@ -249,6 +287,7 @@ struct ReaderSettingsMainSettingsView: View {
       isSelected: isLocked,
       subtitle: nil,
       showsBadge: false,
+      badgeColor: .green,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
@@ -296,6 +335,69 @@ struct ReaderSettingsMainSettingsView: View {
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
       step: 0.01
+    )
+  }
+}
+
+private struct ReaderAskAIPromoBannerView: View {
+  let theme: ReadingTheme
+  let onTry: () -> Void
+  let onDismiss: () -> Void
+
+  var body: some View {
+    HStack(spacing: 12) {
+      ZStack {
+        Circle()
+          .fill(theme.accent.opacity(0.14))
+          .frame(width: 38, height: 38)
+
+        Image(systemName: "sparkles")
+          .font(.system(size: 16, weight: .semibold))
+          .foregroundStyle(theme.accent.opacity(0.95))
+      }
+
+      VStack(alignment: .leading, spacing: 3) {
+        Text("Try Ask AI")
+          .font(.system(size: 14, weight: .bold))
+          .foregroundStyle(theme.surfaceText.opacity(0.94))
+
+        Text("Get instant answers and summaries while you read.")
+          .font(.system(size: 12, weight: .medium))
+          .foregroundStyle(theme.surfaceSecondaryText.opacity(0.85))
+          .lineLimit(2)
+      }
+
+      Spacer(minLength: 0)
+
+      Button(action: onTry) {
+        Text("Try")
+          .font(.system(size: 13, weight: .bold))
+          .foregroundStyle(theme.surfaceBackground)
+          .padding(.horizontal, 12)
+          .padding(.vertical, 9)
+          .background(theme.surfaceText.opacity(0.92), in: Capsule(style: .continuous))
+      }
+      .buttonStyle(.plain)
+
+      Button(action: onDismiss) {
+        Image(systemName: "xmark")
+          .font(.system(size: 11, weight: .bold))
+          .foregroundStyle(theme.surfaceSecondaryText.opacity(0.70))
+          .frame(width: 28, height: 28)
+          .background(theme.surfaceText.opacity(0.06), in: Circle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Dismiss")
+    }
+    .padding(.horizontal, 14)
+    .padding(.vertical, 12)
+    .background(
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .fill(theme.surfaceText.opacity(theme == .night ? 0.06 : 0.045))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .stroke(theme.surfaceText.opacity(theme == .night ? 0.10 : 0.08), lineWidth: 1)
     )
   }
 }

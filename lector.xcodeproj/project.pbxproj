@@ -293,7 +293,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 96S3E4C92F1942000000002 /* Secrets.xcconfig.example */;
 			buildSettings = {
-				API_BASE_URL = "https://reader-go-dev-383281059490.us-central1.run.app/api/v1";
+				API_BASE_URL = "https://reader-go-383281059490.us-central1.run.app/api/v1";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
@@ -340,6 +340,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 96S3E4C92F1942000000002 /* Secrets.xcconfig.example */;
 			buildSettings = {
+				API_BASE_URL = "https://reader-go-383281059490.us-central1.run.app/api/v1";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
@@ -349,7 +350,7 @@
 				DEVELOPMENT_TEAM = F5AC2P3U57;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = lector/Info.plist;
+				INFOPLIST_FILE = lector/Info-Release.plist;
 				INFOPLIST_KEY_API_BASE_URL = "$(API_BASE_URL)";
 				INFOPLIST_KEY_CFBundleDisplayName = "Lector: Clean Reading";
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLName = \"$(PRODUCT_BUNDLE_IDENTIFIER)\";\n    CFBundleURLSchemes =     (\n        lector\n    );\n}";
@@ -410,8 +411,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/PostHog/posthog-ios";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 3.8.3;
+				kind = exactVersion;
+				version = 3.41.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

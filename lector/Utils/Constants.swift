@@ -30,7 +30,7 @@ enum ReaderLimits {
 }
 
 enum APIConfig {
-  /// Use Info.plist API_BASE_URL when set. Otherwise: local/TestFlight → dev backend; App Store / main → production.
+  /// Use Info.plist API_BASE_URL when set. Otherwise production (or dev for TestFlight via sandbox receipt).
   static var baseURL: URL {
     let value =
       (Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String)?.trimmingCharacters(
@@ -41,13 +41,9 @@ enum APIConfig {
     return normalizeHTTPURL(value?.isEmpty == false ? value! : fallback, fallback: fallback)
   }
 
-  /// True when the app should use the dev backend: local (DEBUG) or TestFlight (sandbox receipt).
+  /// TestFlight (sandbox receipt) uses dev backend; App Store uses production.
   private static var useDevBackendByDefault: Bool {
-    #if DEBUG
-    return true
-    #else
-    return hasSandboxReceipt
-    #endif
+    hasSandboxReceipt
   }
 
   /// TestFlight (and dev installs) use a sandbox receipt; App Store uses production receipt.

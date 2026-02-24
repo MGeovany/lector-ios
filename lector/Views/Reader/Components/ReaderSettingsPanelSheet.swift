@@ -124,12 +124,6 @@ struct ReaderSettingsPanelSheet: View {
     .animation(.spring(response: 0.30, dampingFraction: 0.88), value: askAI.messages.count)
     .animation(nil, value: localDragOffset)
     .transition(.move(edge: .bottom).combined(with: .opacity))
-    .onChange(of: localDragOffset) { _, newValue in
-      let clamped = min(max(newValue, 0), collapseRange)
-      if clamped != newValue {
-        localDragOffset = clamped
-      }
-    }
   }
 
   private var panelBackground: Color {

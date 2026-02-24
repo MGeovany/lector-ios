@@ -7,7 +7,7 @@ lector.code-workspace
 .swiftpm/
 /Package.resolved
 
-# Secrets (copiar desde Secrets.xcconfig.example)
+# Secrets 
 Secrets.xcconfig
 
 # Xcode
@@ -17,3 +17,5 @@ xcuserdata/
 *.xcbkptlist
 DerivedData/
 .DS_Store
+skills-lock.json
+.agents/*

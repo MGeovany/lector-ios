@@ -39,10 +39,10 @@ final class HomeViewModel {
   /// Throws (e.g. `CancellationError`) when the task is cancelled so the caller can avoid setting `selectedBook`.
   func waitForOptimizedReady(documentID: String, maxWaitSeconds: Int = 45) async throws -> Bool {
     guard !documentID.isEmpty else { return true }
-    let intervalSeconds: Int = 2
-    var waited: Int = 0
+    let intervalSeconds: TimeInterval = 2
+    let start = Date()
 
-    while waited <= maxWaitSeconds {
+    while Date().timeIntervalSince(start) <= Double(maxWaitSeconds) {
       if Task.isCancelled {
         throw CancellationError()
       }
@@ -65,8 +65,7 @@ final class HomeViewModel {
         // Keep polling on transient errors.
       }
 
-      try await Task.sleep(nanoseconds: UInt64(intervalSeconds) * 1_000_000_000)
-      waited += intervalSeconds
+      try await Task.sleep(nanoseconds: UInt64(intervalSeconds * 1_000_000_000))
     }
 
     // Timeout: open anyway; reader has its own loader.

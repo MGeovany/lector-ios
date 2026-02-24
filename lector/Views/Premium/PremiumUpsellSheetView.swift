@@ -9,6 +9,11 @@ struct PremiumUpsellSheetView: View {
   @State private var showRestoreAlert: Bool = false
   @State private var restoreMessage: String?
   @State private var showDowngradeInfo: Bool = false
+  let initialSelectedPlan: SubscriptionPlan?
+
+  init(initialSelectedPlan: SubscriptionPlan? = nil) {
+    self.initialSelectedPlan = initialSelectedPlan
+  }
 
   var body: some View {
     NavigationStack {
@@ -40,10 +45,16 @@ struct PremiumUpsellSheetView: View {
     }
     .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
+    .presentationBackground(Color(.systemGroupedBackground))
     .onAppear {
       // Default selection follows current subscription.
-      selectedPlan = subscription.plan
-      billingCycle = subscription.plan == .proYearly ? .yearly : .monthly
+      if !subscription.isPremium, let initial = initialSelectedPlan {
+        selectedPlan = initial
+        billingCycle = (initial == .proYearly) ? .yearly : .monthly
+      } else {
+        selectedPlan = subscription.plan
+        billingCycle = subscription.plan == .proYearly ? .yearly : .monthly
+      }
       Task { await subscription.refreshFromStoreKit() }
     }
     .alert(
@@ -119,7 +130,7 @@ struct PremiumUpsellSheetView: View {
           "Private stats (soon)",
           "Ask AI",
         ],
-        badgeText: billingCycle == .yearly ? "Popular" : nil,
+        badgeText: subscription.isPremium ? (billingCycle == .yearly ? "Popular" : nil) : "Free trial",
         isSelected: selectedPlan.isPro,
         onTap: {
           selectedPlan = (billingCycle == .monthly) ? .proMonthly : .proYearly
@@ -241,7 +252,11 @@ struct PremiumUpsellSheetView: View {
     guard let price = subscription.priceText(for: plan) else {
       return "Loading..."
     }
-    return billingCycle == .monthly ? "\(price) / month" : "\(price) / year"
+    let period = billingCycle == .monthly ? "/ month" : "/ year"
+    if subscription.isPremium {
+      return "\(price) \(period)"
+    }
+    return "$0, then \(price) \(period)"
   }
 
   private var founderPriceText: String {

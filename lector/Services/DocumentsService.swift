@@ -7,6 +7,9 @@ protocol DocumentsServicing {
   func getRecentDocumentsByUserID(_ userID: String, since: Date, limit: Int) async throws -> [RemoteDocument]
   func getDocument(id: String) async throws -> RemoteDocumentDetail
   func getOptimizedDocument(id: String) async throws -> RemoteOptimizedDocument
+  /// Fetches optimized document with a specific request timeout.
+  /// Useful for polling flows where we want to bound UI wait time.
+  func getOptimizedDocument(id: String, timeoutInterval: TimeInterval) async throws -> RemoteOptimizedDocument
   func getOptimizedDocumentMeta(id: String) async throws -> RemoteOptimizedDocument
   func updateDocument(documentID: String, title: String?, author: String?, tag: String?) async throws -> RemoteDocumentDetail
   func uploadDocument(fileData: Data, fileName: String, mimeType: String) async throws -> RemoteDocument
@@ -21,6 +24,10 @@ extension DocumentsServicing {
   func getRecentDocumentsByUserID(_ userID: String, since: Date, limit: Int) async throws -> [RemoteDocument] {
     // Fallback for services/backends that don't support recent filters.
     try await getDocumentsByUserID(userID)
+  }
+
+  func getOptimizedDocument(id: String, timeoutInterval: TimeInterval) async throws -> RemoteOptimizedDocument {
+    try await getOptimizedDocument(id: id)
   }
 }
 
@@ -55,10 +62,15 @@ final class GoDocumentsService: DocumentsServicing {
     try await api.get("documents/\(id)/optimized")
   }
 
+  func getOptimizedDocument(id: String, timeoutInterval: TimeInterval) async throws -> RemoteOptimizedDocument {
+    try await api.get("documents/\(id)/optimized", timeoutInterval: timeoutInterval)
+  }
+
   func getOptimizedDocumentMeta(id: String) async throws -> RemoteOptimizedDocument {
     try await api.get(
       "documents/\(id)/optimized",
-      queryItems: [URLQueryItem(name: "include_pages", value: "0")]
+      queryItems: [URLQueryItem(name: "include_pages", value: "0")],
+      timeoutInterval: 8
     )
   }
 

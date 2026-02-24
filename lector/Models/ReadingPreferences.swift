@@ -136,21 +136,28 @@ enum ReadingFont: String, CaseIterable, Identifiable {
   }
 
   func font(size: CGFloat) -> Font {
+    font(size: size, weight: .regular)
+  }
+
+  /// Returns a Font using exact PostScript names so ImageRenderer and export paths
+  /// render the same as the reader (e.g. Avenir Next bold instead of system fallback).
+  func font(size: CGFloat, weight: Font.Weight) -> Font {
+    let isBold = weight == .bold || weight == .semibold
     switch self {
     case .system:
-      return .system(size: size, weight: .regular, design: .default)
+      return .system(size: size, weight: weight, design: .default)
     case .georgia:
-      return .custom("Georgia", size: size)
+      return .custom(isBold ? "Georgia-Bold" : "Georgia", size: size)
     case .palatino:
-      return .custom("Palatino", size: size)
+      return .custom(isBold ? "Palatino-Bold" : "Palatino-Roman", size: size)
     case .avenir:
-      return .custom("Avenir Next", size: size)
+      return .custom(isBold ? "AvenirNext-Bold" : "AvenirNext-Regular", size: size)
     case .menlo:
-      return .custom("Menlo", size: size)
+      return .custom(isBold ? "Menlo-Bold" : "Menlo-Regular", size: size)
     case .iowan:
-      return .custom("Iowan Old Style", size: size)
+      return .custom(isBold ? "IowanOldStyle-Bold" : "IowanOldStyle-Roman", size: size)
     case .baskerville:
-      return .custom("Baskerville", size: size)
+      return .custom(isBold ? "Baskerville-Bold" : "Baskerville", size: size)
     }
   }
 

@@ -228,6 +228,7 @@ struct ReaderSettingsRoundToggleTile: View {
   let isSelected: Bool
   let subtitle: String?
   let showsBadge: Bool
+  let badgeColor: Color
   let surfaceText: Color
   let secondaryText: Color
   let isEnabled: Bool
@@ -247,7 +248,7 @@ struct ReaderSettingsRoundToggleTile: View {
 
           if showsBadge {
             Circle()
-              .fill(Color.green)
+              .fill(badgeColor)
               .frame(width: 10, height: 10)
               .overlay(
                 Circle().stroke(Color.white.opacity(0.95), lineWidth: 2)
