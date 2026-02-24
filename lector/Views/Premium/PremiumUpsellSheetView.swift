@@ -252,7 +252,11 @@ struct PremiumUpsellSheetView: View {
     guard let price = subscription.priceText(for: plan) else {
       return "Loading..."
     }
-    return billingCycle == .monthly ? "\(price) / month" : "\(price) / year"
+    let period = billingCycle == .monthly ? "/ month" : "/ year"
+    if subscription.isPremium {
+      return "\(price) \(period)"
+    }
+    return "$0, then \(price) \(period)"
   }
 
   private var founderPriceText: String {
