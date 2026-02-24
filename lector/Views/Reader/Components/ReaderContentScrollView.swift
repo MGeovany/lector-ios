@@ -2,13 +2,7 @@ import SwiftUI
 
 struct ReaderContentScrollView: View {
   @EnvironmentObject private var preferences: PreferencesViewModel
-  private let debugNavLogs: Bool = {
-#if DEBUG
-    return true
-#else
-    return false
-#endif
-  }()
+  private let debugNavLogs: Bool = false
 
   let book: Book
   @ObservedObject var viewModel: ReaderViewModel
@@ -49,6 +43,26 @@ struct ReaderContentScrollView: View {
 
   private let topAnchorID: String = "readerTop"
   private let scrollSpaceName: String = "readerScrollSpace"
+
+  private var isOptimizedReady: Bool {
+    (viewModel.optimizedProcessingStatus ?? "ready").lowercased() == "ready"
+  }
+
+  /// Show "still processing" only when this page is empty and no later page has content yet.
+  /// If a later page has content (e.g. page 2), earlier pages (e.g. page 1) are treated as available so we don't show "still processing" for page 1 when page 2 is ready.
+  private func isUnavailablePageText(_ text: String, pageIndex: Int) -> Bool {
+    guard !isOptimizedReady else { return false }
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !trimmed.isEmpty { return false }
+    // If any later page has content, this page is considered available (backend fills in order).
+    let pages = viewModel.pages
+    for i in (pageIndex + 1)..<pages.count {
+      if !pages[i].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return false
+      }
+    }
+    return true
+  }
 
   private var bottomContentPadding: CGFloat {
     // When the bottom pager overlays the content, add padding so the text
@@ -178,7 +192,7 @@ struct ReaderContentScrollView: View {
           if shouldUseContinuousScroll && !viewModel.isLoading {
             let baseTopPadding: CGFloat = showSearch ? 106 : 72
             let topPadding = max(12, baseTopPadding - (showTopChrome ? 0 : 48))
-            ReaderScrollIndicatorView(progress: scrollProgress, tint: preferences.theme.accent)
+            ReaderScrollIndicatorView(progress: scrollProgress, tint: preferences.theme.surfaceText.opacity(0.75))
               .padding(.trailing, 8)
               .padding(.top, topPadding)
               .padding(.bottom, 16)
@@ -231,26 +245,35 @@ struct ReaderContentScrollView: View {
   }
 
   private var continuousText: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      ForEach(viewModel.pages.indices, id: \.self) { idx in
-        SelectableTextView(
-          text: viewModel.pages[idx],
-          font: preferences.font.uiFont(size: CGFloat(preferences.fontSize)),
-          textColor: UIColor(preferences.theme.surfaceText),
-          lineSpacing: CGFloat(preferences.fontSize) * CGFloat(max(0, preferences.lineSpacing - 1)),
-          textAlignment: preferences.textAlignment == .justify ? .justified : .natural,
-          highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
-          highlightQuotes: highlightQuotesForPage(pageNumber: idx + 1),
-          showHighlightsInText: preferences.showHighlightsInText,
-          highlightColor: preferences.highlightColor.highlightUIColor(for: preferences.theme),
-          highlightOpacity: preferences.highlightColor.highlightOpacity(for: preferences.theme),
-          clearSelectionToken: clearSelectionToken,
-          scrollToText: nil,
-          scrollToTextToken: 0,
-          onShareSelection: { selected in
-            onShareSelection(selected, idx + 1, scrollProgress)
+    // LazyVStack: only visible pages (and a small buffer) are built, so cost is O(visible) not O(pages).
+    let pageIndices = Array(0..<viewModel.pages.count)
+    return LazyVStack(alignment: .leading, spacing: 16) {
+      ForEach(pageIndices, id: \.self) { idx in
+        let text = viewModel.pages[idx]
+        Group {
+          if isUnavailablePageText(text, pageIndex: idx) {
+            ReaderPageProcessingPlaceholderView(pageNumber: idx + 1, theme: preferences.theme)
+          } else {
+            SelectableTextView(
+              text: text,
+              font: preferences.font.uiFont(size: CGFloat(preferences.fontSize)),
+              textColor: UIColor(preferences.theme.surfaceText),
+              lineSpacing: CGFloat(preferences.fontSize) * CGFloat(max(0, preferences.lineSpacing - 1)),
+              textAlignment: preferences.textAlignment == .justify ? .justified : .natural,
+              highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
+              highlightQuotes: highlightQuotesForPage(pageNumber: idx + 1),
+              showHighlightsInText: preferences.showHighlightsInText,
+              highlightColor: preferences.highlightColor.highlightUIColor(for: preferences.theme),
+              highlightOpacity: preferences.highlightColor.highlightOpacity(for: preferences.theme),
+              clearSelectionToken: clearSelectionToken,
+              scrollToText: nil,
+              scrollToTextToken: 0,
+              onShareSelection: { selected in
+                onShareSelection(selected, idx + 1, scrollProgress)
+              }
+            )
           }
-        )
+        }
         .id("page-\(idx)")
       }
     }
@@ -262,24 +285,31 @@ struct ReaderContentScrollView: View {
 
   private var pagedText: some View {
     let isLastPage = viewModel.currentIndex >= max(0, viewModel.pages.count - 1)
-    return SelectableTextView(
-      text: currentPageText,
-      font: preferences.font.uiFont(size: CGFloat(preferences.fontSize)),
-      textColor: UIColor(preferences.theme.surfaceText),
-      lineSpacing: CGFloat(preferences.fontSize) * CGFloat(max(0, preferences.lineSpacing - 1)),
-      textAlignment: preferences.textAlignment == .justify ? .justified : .natural,
-      highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
-      highlightQuotes: highlightQuotesForPage(pageNumber: viewModel.currentIndex + 1),
-      showHighlightsInText: preferences.showHighlightsInText,
-      highlightColor: preferences.highlightColor.highlightUIColor(for: preferences.theme),
-      highlightOpacity: preferences.highlightColor.highlightOpacity(for: preferences.theme),
-      clearSelectionToken: clearSelectionToken,
-      scrollToText: scrollToText,
-      scrollToTextToken: scrollToTextToken,
-      onShareSelection: { selected in
-        onShareSelection(selected, viewModel.currentIndex + 1, nil)
+    let text = currentPageText
+    return Group {
+      if isUnavailablePageText(text, pageIndex: viewModel.currentIndex) {
+        ReaderPageProcessingPlaceholderView(pageNumber: viewModel.currentIndex + 1, theme: preferences.theme)
+      } else {
+        SelectableTextView(
+          text: text,
+          font: preferences.font.uiFont(size: CGFloat(preferences.fontSize)),
+          textColor: UIColor(preferences.theme.surfaceText),
+          lineSpacing: CGFloat(preferences.fontSize) * CGFloat(max(0, preferences.lineSpacing - 1)),
+          textAlignment: preferences.textAlignment == .justify ? .justified : .natural,
+          highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
+          highlightQuotes: highlightQuotesForPage(pageNumber: viewModel.currentIndex + 1),
+          showHighlightsInText: preferences.showHighlightsInText,
+          highlightColor: preferences.highlightColor.highlightUIColor(for: preferences.theme),
+          highlightOpacity: preferences.highlightColor.highlightOpacity(for: preferences.theme),
+          clearSelectionToken: clearSelectionToken,
+          scrollToText: scrollToText,
+          scrollToTextToken: scrollToTextToken,
+          onShareSelection: { selected in
+            onShareSelection(selected, viewModel.currentIndex + 1, nil)
+          }
+        )
       }
-    )
+    }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, horizontalPadding)
     .padding(.top, 18)
@@ -297,5 +327,34 @@ struct ReaderContentScrollView: View {
     highlights
       .filter { $0.pageNumber == pageNumber }
       .map(\.quote)
+  }
+}
+
+private struct ReaderPageProcessingPlaceholderView: View {
+  let pageNumber: Int
+  let theme: ReadingTheme
+
+  var body: some View {
+    let isDay = (theme == .day)
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(spacing: 10) {
+        ProgressView()
+          .tint(theme.surfaceSecondaryText.opacity(0.9))
+        Text("This page is still processing")
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundStyle(theme.surfaceText.opacity(0.92))
+      }
+      Text("Page \(pageNumber) will appear automatically when ready.")
+        .font(.system(size: 13, weight: .regular))
+        .foregroundStyle(theme.surfaceSecondaryText)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.horizontal, 14)
+    .padding(.vertical, 14)
+    .background(theme.surfaceText.opacity(isDay ? 0.06 : 0.09), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    .overlay(
+      RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .stroke(theme.surfaceText.opacity(isDay ? 0.08 : 0.12), lineWidth: 1)
+    )
   }
 }

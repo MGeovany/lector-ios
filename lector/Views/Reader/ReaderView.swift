@@ -71,13 +71,7 @@ struct ReaderView: View {
     self.initialText = initialText
     let docVM = ReaderViewModel()
     _viewModel = StateObject(wrappedValue: docVM)
-    _sceneViewModel = StateObject(wrappedValue: ReaderSceneViewModel(documentViewModel: docVM, book: book, debugNavLogs:
-#if DEBUG
-      true
-#else
-      false
-#endif
-    ))
+    _sceneViewModel = StateObject(wrappedValue: ReaderSceneViewModel(documentViewModel: docVM, book: book))
     _offlineCoordinator = StateObject(wrappedValue: ReaderOfflineCoordinator(documentID: book.remoteID))
     _askAI = StateObject(wrappedValue: ReaderAskAIViewModel(documentID: book.remoteID ?? ""))
   }
@@ -102,6 +96,7 @@ struct ReaderView: View {
     let layout = makeLayout()
     let scaffold = readerScaffold(layout: layout)
     return scaffold
+      .tint(preferences.theme.surfaceText)
       .toolbar(.hidden, for: .tabBar)
       .toolbar(.hidden, for: .navigationBar)
       .preferredColorScheme(readerStatusBarScheme)

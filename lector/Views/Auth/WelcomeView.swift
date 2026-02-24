@@ -70,9 +70,7 @@ struct WelcomeView: View {
   private var footer: some View {
     VStack(spacing: 12) {
       Button {
-        print("🟠 [WelcomeView] Google Sign In button tapped")
         session.beginGoogleSignIn()
-        print("🟠 [WelcomeView] beginGoogleSignIn() called")
       } label: {
         HStack(spacing: 10) {
           Image("GoogleLogo")

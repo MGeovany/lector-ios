@@ -9,6 +9,11 @@ struct PremiumUpsellSheetView: View {
   @State private var showRestoreAlert: Bool = false
   @State private var restoreMessage: String?
   @State private var showDowngradeInfo: Bool = false
+  let initialSelectedPlan: SubscriptionPlan?
+
+  init(initialSelectedPlan: SubscriptionPlan? = nil) {
+    self.initialSelectedPlan = initialSelectedPlan
+  }
 
   var body: some View {
     NavigationStack {
@@ -43,8 +48,13 @@ struct PremiumUpsellSheetView: View {
     .presentationBackground(Color(.systemGroupedBackground))
     .onAppear {
       // Default selection follows current subscription.
-      selectedPlan = subscription.plan
-      billingCycle = subscription.plan == .proYearly ? .yearly : .monthly
+      if !subscription.isPremium, let initial = initialSelectedPlan {
+        selectedPlan = initial
+        billingCycle = (initial == .proYearly) ? .yearly : .monthly
+      } else {
+        selectedPlan = subscription.plan
+        billingCycle = subscription.plan == .proYearly ? .yearly : .monthly
+      }
       Task { await subscription.refreshFromStoreKit() }
     }
     .alert(
@@ -120,7 +130,7 @@ struct PremiumUpsellSheetView: View {
           "Private stats (soon)",
           "Ask AI",
         ],
-        badgeText: billingCycle == .yearly ? "Popular" : nil,
+        badgeText: subscription.isPremium ? (billingCycle == .yearly ? "Popular" : nil) : "Free trial",
         isSelected: selectedPlan.isPro,
         onTap: {
           selectedPlan = (billingCycle == .monthly) ? .proMonthly : .proYearly

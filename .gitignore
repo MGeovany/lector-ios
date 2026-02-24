@@ -17,3 +17,5 @@ xcuserdata/
 *.xcbkptlist
 DerivedData/
 .DS_Store
+skills-lock.json
+.agents/*

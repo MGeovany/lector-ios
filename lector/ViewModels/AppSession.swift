@@ -34,9 +34,6 @@ final class AppSession {
   func refreshFromKeychain() {
     let token = KeychainStore.getString(account: KeychainKeys.authToken) ?? ""
     let userID = KeychainStore.getString(account: KeychainKeys.userID) ?? ""
-    if !token.isEmpty {
-      print("🟠 [AppSession] JWT from Keychain (Supabase access_token): \(token)")
-    }
     isAuthenticated = !token.isEmpty && !userID.isEmpty
   }
 
@@ -66,8 +63,6 @@ final class AppSession {
 
     do {
       let newSession = try await authService.refreshSession(refreshToken: refresh)
-      print(
-        "🟠 [AppSession] Session refreshed – JWT (Supabase access_token): \(newSession.accessToken)")
       KeychainStore.setString(newSession.accessToken, account: KeychainKeys.authToken)
       if let newRefresh = newSession.refreshToken, !newRefresh.isEmpty {
         KeychainStore.setString(newRefresh, account: KeychainKeys.refreshToken)
@@ -126,10 +121,7 @@ final class AppSession {
   }
 
   func beginGoogleSignIn() {
-    print("🟠 [AppSession] beginGoogleSignIn() called")
     let start = authService.beginGoogleOAuth()
-    print("🟠 [AppSession] OAuth URL generated: \(start.url.absoluteString)")
-    print("🟠 [AppSession] PKCE verifier length: \(start.pkceVerifier.count)")
     pkceVerifier = start.pkceVerifier
     lastOAuthURLString = start.url.absoluteString
 
@@ -142,12 +134,7 @@ final class AppSession {
       && !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       && !urlString.contains(" ")
 
-    print(
-      "🟠 [AppSession] URL validation - scheme: \(scheme ?? "nil"), host: \(host), isValid: \(isValidForWebAuth)"
-    )
-
     guard isValidForWebAuth else {
-      print("🔴 [AppSession] Invalid OAuth URL: \(urlString)")
       let msg = "Couldn't start sign-in. Invalid authorization URL."
       alertMessage = "\(msg)\n\nURL: \(urlString)\n\nCheck SUPABASE_URL configuration."
       PostHogAnalytics.captureError(message: msg, context: ["action": "oauth_start"])
@@ -157,23 +144,15 @@ final class AppSession {
     }
 
     // Run the OAuth flow and handle the callback in-app.
-    print("🟠 [AppSession] Starting OAuth web auth session")
-    print("🟠 [AppSession] Redirect scheme: \(SupabaseConfig.redirectScheme)")
     isAuthenticating = true
     Task {
       do {
-        print("🟠 [AppSession] Calling OAuthWebAuthSession.shared.start()")
         let callbackURL = try await OAuthWebAuthSession.shared.start(
           url: start.url,
           callbackScheme: SupabaseConfig.redirectScheme
         )
-        print("🟠 [AppSession] OAuth callback received: \(callbackURL.absoluteString)")
         await handleOAuthCallback(callbackURL)
       } catch {
-        print("🔴 [AppSession] OAuth error: \(error)")
-        print(
-          "🔴 [AppSession] Error description: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
-        )
         await MainActor.run {
           self.pkceVerifier = nil
           self.isAuthenticating = false
@@ -190,9 +169,6 @@ final class AppSession {
     Task {
       do {
         let session = try await authService.signInWithApple(idToken: idToken, nonce: nonce)
-        print(
-          "🟠 [AppSession] Sign in with Apple – JWT (Supabase access_token): \(session.accessToken)")
-
         KeychainStore.setString(session.accessToken, account: KeychainKeys.authToken)
         if let refresh = session.refreshToken, !refresh.isEmpty {
           KeychainStore.setString(refresh, account: KeychainKeys.refreshToken)
@@ -219,15 +195,8 @@ final class AppSession {
   }
 
   func handleOAuthCallback(_ url: URL) async {
-    print("🟠 [AppSession] handleOAuthCallback called with URL: \(url.absoluteString)")
-    print(
-      "🟠 [AppSession] URL scheme: \(url.scheme ?? "nil"), expected: \(SupabaseConfig.redirectScheme)"
-    )
     // Only handle our OAuth callback.
-    guard url.scheme == SupabaseConfig.redirectScheme else {
-      print("🔴 [AppSession] Callback URL scheme mismatch. Ignoring callback.")
-      return
-    }
+    guard url.scheme == SupabaseConfig.redirectScheme else { return }
 
     // Dismiss the browser as soon as we get the callback.
     isShowingOAuth = false
@@ -237,14 +206,8 @@ final class AppSession {
     defer { isAuthenticating = false }
 
     do {
-      print("🟠 [AppSession] Completing OAuth with callback URL")
-      print("🟠 [AppSession] Has PKCE verifier: \(pkceVerifier != nil)")
       let session = try await authService.completeOAuth(
         callbackURL: url, pkceVerifier: pkceVerifier)
-      print("🟠 [AppSession] OAuth completed successfully")
-      print("🟠 [AppSession] User ID: \(session.userID)")
-      print("🟠 [AppSession] Has refresh token: \(session.refreshToken != nil)")
-      print("🟠 [AppSession] JWT (Supabase access_token): \(session.accessToken)")
       pkceVerifier = nil
 
       KeychainStore.setString(session.accessToken, account: KeychainKeys.authToken)
@@ -255,11 +218,9 @@ final class AppSession {
       isAuthenticated = true
       PostHogAnalytics.identify(userId: session.userID)
       PostHogAnalytics.capture("signed_in", properties: ["method": "oauth"])
-      print("🟠 [AppSession] Session saved to keychain, isAuthenticated = true")
       await refreshProfileIfNeeded()
       await syncAccountStatus()
     } catch {
-      print("🔴 [AppSession] Error completing OAuth: \(error)")
       pkceVerifier = nil
       let msg = (error as? LocalizedError)?.errorDescription ?? "Failed to sign in."
       alertMessage = msg

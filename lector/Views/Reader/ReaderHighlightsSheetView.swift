@@ -48,6 +48,11 @@ struct ReaderHighlightsSheetView: View {
       .background(preferences.theme.surfaceBackground.ignoresSafeArea())
       .navigationTitle("Highlights")
       .navigationBarTitleDisplayMode(.inline)
+      .tint(preferences.theme.surfaceText)
+      .toolbarBackground(preferences.theme.surfaceBackground, for: .navigationBar)
+      .toolbarBackground(.visible, for: .navigationBar)
+      .toolbarColorScheme(preferences.theme == .night ? .dark : .light, for: .navigationBar)
+      .preferredColorScheme(preferences.theme == .night ? .dark : .light)
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
           Button("Close") { dismiss() }

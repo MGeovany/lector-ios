@@ -7,6 +7,9 @@ final class ReaderViewModel: ObservableObject {
   @Published var currentIndex: Int = 0
   @Published private(set) var isLoading: Bool = false
   @Published var loadErrorMessage: String?
+  /// Tracks optimized processing status so UI can show per-page placeholders.
+  /// Values: "ready" | "processing" | "failed" | nil (unknown / non-optimized path).
+  @Published private(set) var optimizedProcessingStatus: String?
 
   /// Key used in loadErrorMessage when the app is offline and the book has no local copy.
   static let offlineNotAvailableErrorKey = "OFFLINE_NOT_AVAILABLE"
@@ -14,10 +17,76 @@ final class ReaderViewModel: ObservableObject {
   private let emptyRemoteMessage = "No content to display."
 
   private let debugLoggingEnabled: Bool = false
+  private var processingRefreshTask: Task<Void, Never>? = nil
 
   private func debugLog(_ message: @autoclosure () -> String) {
     guard debugLoggingEnabled else { return }
     print("[ReaderLoad] \(message())")
+  }
+
+  private static func normalizedStatus(_ raw: String?) -> String? {
+    raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
+
+  private static func padPagesToTotal(_ pages: [String], totalPages: Int) -> [String] {
+    let total = max(1, totalPages)
+    guard pages.count < total else { return pages }
+    return pages + Array(repeating: "", count: total - pages.count)
+  }
+
+  private func startRefreshingOptimizedWhileProcessing(
+    remoteID: String,
+    documentsService: DocumentsServicing
+  ) {
+    processingRefreshTask?.cancel()
+    processingRefreshTask = Task { @MainActor in
+      let intervalNanos: UInt64 = 2_000_000_000
+      let maxSeconds: Int = 120
+      var elapsed: Int = 0
+      var lastChecksum: String? = nil
+
+      while elapsed < maxSeconds, !Task.isCancelled {
+        try? await Task.sleep(nanoseconds: intervalNanos)
+        elapsed += 2
+        guard !Task.isCancelled else { return }
+
+        guard let opt = try? await documentsService.getOptimizedDocument(id: remoteID) else { continue }
+        let nextChecksum = opt.optimizedChecksumSHA256
+        self.optimizedProcessingStatus = Self.normalizedStatus(opt.processingStatus)
+
+        if let rawPages = opt.pages, !rawPages.isEmpty {
+          let nextPages = Self.padPagesToTotal(rawPages, totalPages: max(rawPages.count, self.pages.count))
+
+          let didChange =
+            nextPages.count != self.pages.count
+            || nextChecksum != lastChecksum
+
+          if didChange {
+            self.debugLog(
+              "optimized_refresh docID=\(remoteID) status=\(opt.processingStatus) pages=\(rawPages.count) visible=\(nextPages.count)"
+            )
+            self.setPages(nextPages, initialPage: nil)
+          }
+        }
+
+        lastChecksum = nextChecksum
+
+        if opt.processingStatus.lowercased() == "ready" {
+          if OfflinePinStore.isPinned(remoteID: remoteID),
+            let pages = opt.pages,
+            !pages.isEmpty
+          {
+            try? OptimizedPagesStore.savePages(
+              remoteID: remoteID,
+              pages: pages,
+              optimizedVersion: opt.optimizedVersion,
+              optimizedChecksumSHA256: opt.optimizedChecksumSHA256
+            )
+          }
+          return
+        }
+      }
+    }
   }
 
   func setPages(_ newPages: [String], initialPage: Int?) {
@@ -60,6 +129,7 @@ final class ReaderViewModel: ObservableObject {
       !cached.isEmpty
     {
       debugLog("cache_hit docID=\(id) pages=\(cached.count)")
+      optimizedProcessingStatus = "ready"
       setPages(cached, initialPage: book.currentPage)
 
       // If the user pinned this doc for offline, refresh in background when possible.
@@ -87,16 +157,12 @@ final class ReaderViewModel: ObservableObject {
 
     debugLog("cache_miss docID=\(id) fetching_optimized=1")
 
-    isLoading = true
+    // Open instantly: seed placeholders for total page count.
+    // As the backend processes pages, we’ll swap in real content per page.
+    optimizedProcessingStatus = "processing"
+    setPages(Array(repeating: "", count: max(1, book.pagesTotal)), initialPage: book.currentPage)
+    isLoading = false
     loadErrorMessage = nil
-
-    // Safety: update subtitle if the spinner takes too long.
-    let watchdog = Task { @MainActor in
-      try? await Task.sleep(nanoseconds: 6_000_000_000)
-      if self.isLoading, (self.loadErrorMessage ?? "").isEmpty {
-        self.loadErrorMessage = "Still working…"
-      }
-    }
 
     do {
       // Prefer optimized offline-first payload.
@@ -113,82 +179,53 @@ final class ReaderViewModel: ObservableObject {
         opt = nil
       }
 
-      if var opt = opt {
+      if let opt = opt {
+        optimizedProcessingStatus = Self.normalizedStatus(opt.processingStatus)
         debugLog(
           "optimized docID=\(id) status=\(opt.processingStatus) pages=\(opt.pages?.count ?? 0) optVer=\(opt.optimizedVersion) checksum=\(opt.optimizedChecksumSHA256 ?? "nil")"
         )
-        if let pages = opt.pages, !pages.isEmpty {
-          setPages(pages, initialPage: book.currentPage)
-          isLoading = false
-          loadErrorMessage = nil
-          watchdog.cancel()
-          if OfflinePinStore.isPinned(remoteID: id) {
-            try? OptimizedPagesStore.savePages(
-              remoteID: id,
-              pages: pages,
-              optimizedVersion: opt.optimizedVersion,
-              optimizedChecksumSHA256: opt.optimizedChecksumSHA256
-            )
-          }
-          return
-        }
 
-        if opt.processingStatus == "failed" {
+        if opt.processingStatus.lowercased() == "failed" {
           debugLog("optimized_failed docID=\(id)")
+          optimizedProcessingStatus = "failed"
           loadErrorMessage = "Failed to process."
           isLoading = false
-          watchdog.cancel()
           setPages([""], initialPage: 1)
           return
         }
 
-        if opt.processingStatus != "ready" {
+        if let pages = opt.pages, !pages.isEmpty {
+          // Keep full length (including empty placeholders) so paging stays stable.
+          let padded = Self.padPagesToTotal(pages, totalPages: book.pagesTotal)
+          setPages(padded, initialPage: book.currentPage)
+        } else {
+          // No pages ready yet: keep placeholders seeded above.
+        }
+
+        // While processing, refresh in background so pages fill in as they become available.
+        if opt.processingStatus.lowercased() != "ready" {
           debugLog("optimized_processing docID=\(id) status=\(opt.processingStatus)")
-          loadErrorMessage = "Preparing your document…"
-          let maxWaitSeconds: Int = 12
-          let intervalSeconds: Int = 2
-          var waited: Int = 0
-
-          while opt.processingStatus != "ready", opt.processingStatus != "failed",
-            waited < maxWaitSeconds
-          {
-            try? await Task.sleep(nanoseconds: UInt64(intervalSeconds) * 1_000_000_000)
-            waited += intervalSeconds
-            loadErrorMessage = "Preparing your document…"
-            if let next = try? await documentsService.getOptimizedDocument(id: id) {
-              opt = next
-            }
-            debugLog(
-              "optimized_poll docID=\(id) waited=\(waited)s status=\(opt.processingStatus) pages=\(opt.pages?.count ?? 0)"
-            )
-            if let pages = opt.pages, !pages.isEmpty {
-              setPages(pages, initialPage: book.currentPage)
-              isLoading = false
-              loadErrorMessage = nil
-              watchdog.cancel()
-              return
-            }
-          }
-
-          if opt.processingStatus == "failed" {
-            debugLog("optimized_failed_after_poll docID=\(id) waited=\(waited)s")
-            loadErrorMessage = "Failed to process."
-            isLoading = false
-            watchdog.cancel()
-            setPages([""], initialPage: 1)
-            return
-          }
-
-          // Keep the loader up; backend continues processing.
-          debugLog(
-            "optimized_timeout_keep_loader docID=\(id) waited=\(waited)s lastStatus=\(opt.processingStatus)"
-          )
-          loadErrorMessage = "Still preparing…"
-          watchdog.cancel()
+          startRefreshingOptimizedWhileProcessing(remoteID: id, documentsService: documentsService)
           return
         }
-        
-        debugLog("optimized_ready_but_empty_pages docID=\(id) fallback_to_document_detail=1")
+
+        // Ready: if pinned, persist for offline.
+        if OfflinePinStore.isPinned(remoteID: id),
+          let pages = opt.pages,
+          !pages.isEmpty
+        {
+          try? OptimizedPagesStore.savePages(
+            remoteID: id,
+            pages: pages,
+            optimizedVersion: opt.optimizedVersion,
+            optimizedChecksumSHA256: opt.optimizedChecksumSHA256
+          )
+        }
+
+        // If ready but empty, fall back to full document below.
+        if (opt.pages ?? []).isEmpty {
+          debugLog("optimized_ready_but_empty_pages docID=\(id) fallback_to_document_detail=1")
+        }
       }
 
       // Fallback (older docs/backends): fetch full content and paginate.
@@ -217,7 +254,7 @@ final class ReaderViewModel: ObservableObject {
       {
         setPages(pagesByBackend, initialPage: book.currentPage)
         isLoading = false
-        watchdog.cancel()
+        optimizedProcessingStatus = "ready"
         debugLog("done_using_backend_pages docID=\(id)")
         return
       }
@@ -232,7 +269,7 @@ final class ReaderViewModel: ObservableObject {
         loadErrorMessage = nil
         setPages([emptyRemoteMessage], initialPage: 1)
         isLoading = false
-        watchdog.cancel()
+        optimizedProcessingStatus = "ready"
         return
       }
 
@@ -240,16 +277,16 @@ final class ReaderViewModel: ObservableObject {
       debugLog("paginated docID=\(id) pages=\(paged.count)")
       setPages(paged, initialPage: book.currentPage)
       isLoading = false
-      watchdog.cancel()
+      optimizedProcessingStatus = "ready"
     } catch {
       debugLog("error docID=\(id) error=\(error)")
       if let cached = OptimizedPagesStore.loadPages(remoteID: id, expectedChecksum: nil),
         !cached.isEmpty
       {
         setPages(cached, initialPage: book.currentPage)
+        optimizedProcessingStatus = "ready"
         loadErrorMessage = nil
         isLoading = false
-        watchdog.cancel()
         return
       }
       let isDownloaded = OptimizedPagesStore.hasLocalCopy(remoteID: id)
@@ -269,8 +306,8 @@ final class ReaderViewModel: ObservableObject {
           ],
           initialPage: 1
         )
-      } else if !isDownloaded {
-        // App is offline (or can't connect) and this book isn't available offline.
+      } else if case APIError.network = error, !isDownloaded {
+        // Device is offline (or unreachable) and this book has no local copy.
         loadErrorMessage = Self.offlineNotAvailableErrorKey
         setPages(
           [
@@ -279,6 +316,7 @@ final class ReaderViewModel: ObservableObject {
           initialPage: 1
         )
       } else {
+        // Any other error (timeout, server error, decoding, etc.) or has local copy but can't reach server.
         loadErrorMessage = "Can't connect"
         setPages(
           [
@@ -288,7 +326,6 @@ final class ReaderViewModel: ObservableObject {
         )
       }
       isLoading = false
-      watchdog.cancel()
     }
   }
 

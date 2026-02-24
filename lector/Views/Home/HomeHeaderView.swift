@@ -52,12 +52,7 @@ struct HomeHeaderView: View {
 
           Spacer()
 
-          Button(action: {
-            print("🔵 [HomeHeaderView] Plus button tapped")
-            print("🔵 [HomeHeaderView] onAddTapped is nil: \(onAddTapped == nil)")
-            onAddTapped?()
-            print("🔵 [HomeHeaderView] onAddTapped called")
-          }) {
+          Button(action: { onAddTapped?() }) {
             Image(systemName: "plus")
               .padding(.top, 14)
               .font(.parkinsans(size: 44, weight: .light))

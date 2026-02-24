@@ -12,8 +12,6 @@ struct HomeView: View {
   @State private var toast: UploadToastData?
   @StateObject private var networkMonitor = NetworkMonitor.shared
   @State private var selectedSection: LibrarySection = .allBooks
-  @State private var isPreparingToOpenUploadedDoc: Bool = false
-  @State private var prepareOpenTask: Task<Void, Never>?
 
   private static let allowedImportTypes: [UTType] = {
     var types: [UTType] = [.pdf]
@@ -86,25 +84,6 @@ struct HomeView: View {
           UploadToastView(toast: toast)
             .padding(.top, 8)
             .transition(.move(edge: .top).combined(with: .opacity))
-        }
-      }
-      .overlay {
-        if isPreparingToOpenUploadedDoc {
-          ZStack {
-            Color.black.opacity(0.18).ignoresSafeArea()
-            VStack(spacing: 10) {
-              ProgressView()
-              Text("Preparing your document…")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(
-                  colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(
-              .ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-          }
-          .transition(.opacity)
         }
       }
       .onChange(of: addViewModel.didUploadSuccessfully) { _, didSucceed in
@@ -235,22 +214,10 @@ struct HomeView: View {
           let stableID = UUID(uuidString: remoteID) ?? UUID()
 
           Task { @MainActor in
-            prepareOpenTask?.cancel()
-            isPreparingToOpenUploadedDoc = true
-            prepareOpenTask = Task { @MainActor in
-              do {
-                _ = try await viewModel.waitForOptimizedReady(documentID: remoteID)
-              } catch {
-                isPreparingToOpenUploadedDoc = false
-                return
-              }
-              isPreparingToOpenUploadedDoc = false
-
-              if let existing = viewModel.books.first(where: { $0.remoteID == remoteID }) {
-                viewModel.selectedBook = existing
-                return
-              }
-
+            // Open instantly; the reader will show per-page placeholders while processing.
+            if let existing = viewModel.books.first(where: { $0.remoteID == remoteID }) {
+              viewModel.selectedBook = existing
+            } else {
               viewModel.selectedBook = Book(
                 id: stableID,
                 remoteID: remoteID,
@@ -267,7 +234,6 @@ struct HomeView: View {
                 isFavorite: false,
                 tags: []
               )
-
               Task { await viewModel.reload() }
             }
           }

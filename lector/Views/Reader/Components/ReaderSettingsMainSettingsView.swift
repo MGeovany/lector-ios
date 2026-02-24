@@ -22,6 +22,7 @@ struct ReaderSettingsMainSettingsView: View {
   let offlineIsAvailable: Bool
 
   @State private var showPremiumSheet: Bool = false
+  @State private var premiumInitialPlan: SubscriptionPlan? = nil
   private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
   var body: some View {
@@ -99,22 +100,32 @@ struct ReaderSettingsMainSettingsView: View {
       isPresented: Binding(
         get: { showPremiumSheet && !isPad },
         set: { newValue in
-          if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+          if !newValue {
+            showPremiumSheet = false
+            premiumInitialPlan = nil
+          } else {
+            showPremiumSheet = true
+          }
         }
       )
     ) {
-      PremiumUpsellSheetView()
+      PremiumUpsellSheetView(initialSelectedPlan: premiumInitialPlan)
         .environmentObject(subscription)
     }
     .fullScreenCover(
       isPresented: Binding(
         get: { showPremiumSheet && isPad },
         set: { newValue in
-          if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+          if !newValue {
+            showPremiumSheet = false
+            premiumInitialPlan = nil
+          } else {
+            showPremiumSheet = true
+          }
         }
       )
     ) {
-      PremiumUpsellSheetView()
+      PremiumUpsellSheetView(initialSelectedPlan: premiumInitialPlan)
         .environmentObject(subscription)
     }
   }
@@ -145,6 +156,7 @@ struct ReaderSettingsMainSettingsView: View {
       isSelected: audiobookEnabled,
       subtitle: nil,
       showsBadge: false,
+      badgeColor: .green,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
@@ -196,6 +208,7 @@ struct ReaderSettingsMainSettingsView: View {
             // localDragOffset = 0
             screen = .askAI
           } else {
+            premiumInitialPlan = .proMonthly
             showPremiumSheet = true
           }
         }
@@ -220,12 +233,18 @@ struct ReaderSettingsMainSettingsView: View {
   }
 
   private var offlineTile: some View {
-    ReaderSettingsRoundToggleTile(
+    let badge: Color = {
+      if offlineIsAvailable { return .green }
+      if offlineEnabled, offlineSubtitle != nil { return .yellow }
+      return Color.green.opacity(0.35)
+    }()
+    return ReaderSettingsRoundToggleTile(
       title: "Offline",
       systemImage: offlineEnabled ? "wifi.slash" : "wifi",
       isSelected: offlineEnabled,
       subtitle: offlineSubtitle,
-      showsBadge: offlineIsAvailable,
+      showsBadge: offlineEnabled,
+      badgeColor: badge,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
@@ -249,6 +268,7 @@ struct ReaderSettingsMainSettingsView: View {
       isSelected: isLocked,
       subtitle: nil,
       showsBadge: false,
+      badgeColor: .green,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,

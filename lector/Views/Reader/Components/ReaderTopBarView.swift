@@ -1,14 +1,27 @@
 import SwiftUI
 
+private struct ReaderBarButtonStyle: ButtonStyle {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .scaleEffect(configuration.isPressed && !reduceMotion ? 0.92 : 1.0)
+      .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+  }
+}
+
 struct ReaderTopBarView: View {
   @EnvironmentObject private var preferences: PreferencesViewModel
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   let horizontalPadding: CGFloat
   @Binding var showReaderSettings: Bool
   let onShowHighlights: () -> Void
   let onBack: () -> Void
 
-  private let iconButtonSize: CGFloat = 34
+  private static let touchTarget: CGFloat = 28
+  private static let cornerRadius: CGFloat = 8
+  private static let iconGraphicSize: CGFloat = 12
 
   private var isDarkTheme: Bool {
     preferences.theme == .night || preferences.theme == .amber
@@ -16,6 +29,14 @@ struct ReaderTopBarView: View {
 
   private var headerIconOpacity: Double {
     isDarkTheme ? 0.96 : 0.88
+  }
+
+  private var iconTint: Color {
+    preferences.theme.surfaceText.opacity(headerIconOpacity)
+  }
+
+  private var chromeFill: Color {
+    preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.06 : 0.12)
   }
 
   @ViewBuilder
@@ -26,23 +47,21 @@ struct ReaderTopBarView: View {
   ) -> some View {
     Button(action: action) {
       label()
-        .frame(width: iconButtonSize, height: iconButtonSize)
+        .frame(width: Self.touchTarget, height: Self.touchTarget)
         .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(ReaderBarButtonStyle())
+    .background(chromeFill, in: RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
     .accessibilityLabel(accessibilityLabel)
   }
 
   var body: some View {
-    HStack(spacing: 8) {
-      Button(action: onBack) {
+    HStack(spacing: 6) {
+      headerIconButton(accessibilityLabel: "Back", action: onBack) {
         Image(systemName: "chevron.left")
-          .font(.system(size: 15, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
-          .padding(8)
+          .font(.system(size: Self.iconGraphicSize, weight: .semibold))
+          .foregroundStyle(iconTint)
       }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Back")
 
       Spacer(minLength: 0)
 
@@ -56,14 +75,14 @@ struct ReaderTopBarView: View {
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
-            .frame(width: 19, height: 19)
-            .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
+            .frame(width: Self.iconGraphicSize, height: Self.iconGraphicSize)
+            .foregroundStyle(iconTint)
         }
 
         headerIconButton(accessibilityLabel: "Highlights", action: onShowHighlights) {
           Image(systemName: "bookmark")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
+            .font(.system(size: Self.iconGraphicSize, weight: .semibold))
+            .foregroundStyle(iconTint)
         }
 
         headerIconButton(accessibilityLabel: "Cycle theme", action: {
@@ -78,10 +97,15 @@ struct ReaderTopBarView: View {
             }
           }
         }) {
-          Image(systemName: preferences.theme.icon)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
-            .symbolEffect(.bounce, value: preferences.theme)
+          let base = Image(systemName: preferences.theme.icon)
+            .font(.system(size: Self.iconGraphicSize, weight: .semibold))
+            .foregroundStyle(iconTint)
+
+          if reduceMotion {
+            base
+          } else {
+            base.symbolEffect(.bounce, value: preferences.theme)
+          }
         }
       }
     }
